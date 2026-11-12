@@ -24,7 +24,7 @@
 <div class="stage" id="stage"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="assets/app.js"></script>
+<script src="assets/app.js?v=4"></script>
 <script>
   const stage = document.getElementById('stage');
   let D = null, lastKey = '', soundedWin = false, lastCount = -1;
@@ -130,7 +130,13 @@
     peer.on('open', () => {
       conn = peer.connect('thg-' + pin, { reliable: true });
       conn.on('open', () => conn.send({ t: 'projector' }));
-      conn.on('data', m => { if (m && m.t === 'state') { D = m.s; syncClock(D.serverNow); render(D); } });
+      conn.on('data', m => {
+        if (m && m.t === 'state') {
+          D = m.s; syncClock(D.serverNow);
+          bgm.update(D.phase);   // เปลี่ยนเพลงตามช่วงของเกม (LOBBY / QUESTION / REVEAL / PUZZLE / PODIUM)
+          render(D);
+        }
+      });
       conn.on('close', again); conn.on('error', again);
     });
   }
