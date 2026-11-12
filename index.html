@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>เข้าร่วมเกม</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;800&display=swap">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<!-- ============ JOIN ============ -->
+<main id="joinView" class="screen">
+  <h1 style="font-size:40px;">🗺️ เกมล่าขุมสมบัติ</h1>
+  <div class="card center stack" style="max-width:380px;width:100%;">
+    <div id="pinStep" class="stack">
+      <input id="pinInput" class="big" inputmode="numeric" autocomplete="off" placeholder="รหัสเกม" maxlength="10" aria-label="รหัสเกม">
+      <button class="btn btn-dark btn-block btn-lg" id="pinBtn">เข้าร่วม</button>
+    </div>
+    <div id="nickStep" class="stack" hidden>
+      <input id="teamInput" class="big" autocomplete="off" placeholder="ชื่อทีม" maxlength="30" aria-label="ชื่อทีม">
+      <input id="nickInput" class="big" autocomplete="off" placeholder="ชื่อของคุณ (ไม่บังคับ)" maxlength="20" aria-label="ชื่อของคุณ">
+      <p class="muted" style="margin:0;font-size:14px;">พิมพ์ชื่อทีมเดียวกับเพื่อนเพื่อเข้าทีมเดียวกัน</p>
+      <button class="btn btn-dark btn-block btn-lg" id="nickBtn">ไปกันเลย!</button>
+    </div>
+    <p id="joinError" style="color:#c0392b;margin:0;min-height:1.4em;" role="alert"></p>
+  </div>
+  <p><a href="host.html">ครูผู้ควบคุมเกม</a></p>
+</main>
+
+<!-- ============ GAME ============ -->
+<div id="gameView" hidden>
+  <div id="connBanner" class="card center" style="background:#fff7d6;border-radius:0;" hidden>📡 กำลังเชื่อมต่อใหม่...</div>
+  <div class="topbar">
+    <span class="nm" id="nickLabel"></span>
+    <span id="letters"></span>
+    <span class="pill" id="scoreLabel">0</span>
+  </div>
+
+  <main class="wrap" style="max-width:640px;">
+
+    <section id="s_LOBBY" class="screen" style="min-height:70vh;">
+      <div style="font-size:64px;">🎉</div>
+      <h2>เข้าร่วมแล้ว!</h2>
+      <p>เห็นชื่อทีมบนจอไหม? รอครูเริ่มเกมนะ</p>
+      <span class="pill" id="lobbyCount"></span>
+    </section>
+
+    <section id="s_QUESTION" class="stack" hidden>
+      <div class="row spread">
+        <span class="pill" id="qCounter"></span>
+        <span class="timernum" id="tNum"></span>
+      </div>
+      <div class="timerbar"><i id="tBar"></i></div>
+      <div class="qtext" id="qText"></div>
+      <img id="qImg" class="qimg" alt="" hidden>
+      <div id="getReady" class="screen" style="min-height:0;padding:10px;" hidden>
+        <div style="font-size:72px;font-weight:800;color:var(--gold);" id="readyNum">3</div>
+        <div>เตรียมตัว...</div>
+      </div>
+      <div id="tiles" class="tiles"></div>
+      <div id="waiting" class="result none" hidden>
+        <div style="font-size:48px;">⏳</div>
+        <div class="big" style="font-size:28px;">ส่งคำตอบแล้ว!</div>
+        <div id="waitingChoice" class="tile" style="display:inline-flex;margin-top:12px;min-height:0;"></div>
+        <div style="margin-top:8px;">รอเฉลยพร้อมเพื่อนๆ...</div>
+      </div>
+      <p id="answerError" style="color:#ffb3b3;text-align:center;min-height:1.4em;" role="alert"></p>
+    </section>
+
+    <section id="s_REVEAL" class="stack" hidden>
+      <div id="resultBox" class="result"></div>
+      <div class="row" style="justify-content:center;" id="resultStats"></div>
+      <div class="card" id="resultExplain" hidden></div>
+    </section>
+
+    <section id="s_PUZZLE" class="stack" hidden>
+      <div class="card stack">
+        <h2>🧩 ห้องสมบัติ</h2>
+        <p>ช่วยกันเอารหัสลับของทีมมาเรียงเป็นคำตอบ (ใครในทีมตอบถูก ทีมได้คะแนน)</p>
+        <p class="muted">คำใบ้: <span id="puzzleHint"></span></p>
+        <div id="puzzleLetters"></div>
+        <input id="puzzleInput" placeholder="พิมพ์คำตอบ" autocomplete="off">
+        <button class="btn btn-dark btn-block" id="puzzleBtn">🔓 ไขปริศนา</button>
+        <p id="puzzleMsg" style="font-weight:600;margin:0;" role="status"></p>
+      </div>
+    </section>
+
+    <section id="s_PODIUM" class="screen" style="min-height:70vh;" hidden>
+      <div style="font-size:90px;" id="podiumIcon">🏆</div>
+      <h1 id="podiumTitle"></h1>
+      <div class="row" style="justify-content:center;" id="podiumStats"></div>
+      <div id="podiumLetters"></div>
+    </section>
+
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="assets/app.js"></script>
+<script>
+  const $ = id => document.getElementById(id);
+  const ID = 'thg_player';           // เก็บ { pin, token } ไว้เข้าเกมต่ออัตโนมัติ
+  let saved = null; try { saved = JSON.parse(localStorage.getItem(ID)); } catch (e) {}
+  let peer = null, conn = null, pin = '', token = '';
+  let S = null, renderedQid = null, soundedQid = null, sending = false, podiumShown = false;
+  let pendingJoin = null, retryTimer = null, leaving = false;
+
+  /* ---------- เครือข่าย ---------- */
+  function ensurePeer(cb) {
+    if (peer && !peer.destroyed && peer.open) return cb();
+    if (peer && !peer.destroyed) { peer.once('open', cb); return; }
+    peer = new Peer();
+    peer.on('open', cb);
+    peer.on('error', err => {
+      if (err.type === 'peer-unavailable') {
+        if (pendingJoin) return joinFail('ไม่พบเกมรหัสนี้ ตรวจรหัสอีกครั้ง หรือรอให้ครูเปิดหน้า host');
+        return scheduleReconnect();
+      }
+      if (pendingJoin) joinFail('เชื่อมต่อไม่ได้ (' + err.type + ') ลองใหม่อีกครั้ง');
+      else scheduleReconnect();
+    });
+    peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) {} });
+  }
+
+  function connect(onOpen) {
+    ensurePeer(() => {
+      if (conn) { try { conn.close(); } catch (e) {} }
+      conn = peer.connect('thg-' + pin, { reliable: true });
+      let opened = false;
+      const t = setTimeout(() => { if (!opened) { if (pendingJoin) joinFail('ไม่พบเกมรหัสนี้ หรือเครือข่ายนี้เชื่อมต่อไม่ได้'); else scheduleReconnect(); } }, 12000);
+      conn.on('open', () => { opened = true; clearTimeout(t); $('connBanner') && ($('connBanner').hidden = true); onOpen(); });
+      conn.on('data', onMsg);
+      conn.on('close', () => { if (!leaving && token) scheduleReconnect(); });
+    });
+  }
+
+  function scheduleReconnect() {
+    if (leaving || !token || retryTimer) return;
+    $('connBanner').hidden = false;
+    retryTimer = setTimeout(() => { retryTimer = null; connect(() => conn.send({ t: 'rejoin', token })); }, 2000);
+  }
+
+  function onMsg(m) {
+    if (!m) return;
+    if (m.t === 'joined') {
+      pendingJoin = null; token = m.token;
+      localStorage.setItem(ID, JSON.stringify({ pin, token }));
+      sfx.tap(); showGame();
+    } else if (m.t === 'error') {
+      joinFail(m.msg);
+    } else if (m.t === 'gone') {
+      leaveToJoin(m.msg);
+    } else if (m.t === 'state') {
+      S = m.s; syncClock(S.serverNow); showGame(); render(S);
+    } else if (m.t === 'answerResult') {
+      sending = false;
+      if (!m.ok && m.code !== 'ALREADY') {
+        if (m.code === 'NOT_FOUND') return leaveToJoin(m.msg);
+        if (S) S.myAnswer = null;
+        $('answerError').textContent = m.msg; if (S) renderQuestion(S);
+      }
+    } else if (m.t === 'puzzleResult') {
+      const el = $('puzzleMsg');
+      if (m.ok && m.correct) { el.textContent = '🎉 ถูกต้อง!' + (m.bonus ? ' โบนัสทีม +' + m.bonus : ''); el.style.color = 'var(--ok)'; sfx.right(); }
+      else { el.textContent = m.ok ? '❌ ยังไม่ถูกต้อง ลองอีกครั้ง' : m.msg; el.style.color = 'var(--bad)'; sfx.wrong(); }
+    }
+  }
+
+  /* ---------- Join ---------- */
+  function joinFail(msg) {
+    pendingJoin = null; $('nickBtn').disabled = false; $('pinBtn').disabled = false;
+    $('joinError').textContent = msg;
+    $('nickStep').hidden = true; $('pinStep').hidden = false;
+  }
+  $('pinBtn').onclick = () => {
+    const v = $('pinInput').value.trim(); if (!v) return;
+    pin = v; $('joinError').textContent = '';
+    $('pinStep').hidden = true; $('nickStep').hidden = false; $('teamInput').focus();
+  };
+  $('pinInput').onkeydown = e => { if (e.key === 'Enter') $('pinBtn').click(); };
+  $('nickInput').onkeydown = $('teamInput').onkeydown = e => { if (e.key === 'Enter') $('nickBtn').click(); };
+  $('nickBtn').onclick = () => {
+    const team = $('teamInput').value.trim(), nick = $('nickInput').value.trim();
+    if (!team) { $('joinError').textContent = 'กรุณาใส่ชื่อทีม'; return; }
+    $('nickBtn').disabled = true; $('joinError').textContent = 'กำลังเชื่อมต่อ...';
+    pendingJoin = { team, nick };
+    connect(() => conn.send({ t: 'join', team, nick }));
+  };
+
+  function leaveToJoin(msg) {
+    leaving = true; clearTimeout(retryTimer); retryTimer = null;
+    localStorage.removeItem(ID); token = ''; renderedQid = null; podiumShown = false; S = null;
+    try { conn && conn.close(); } catch (e) {}
+    $('gameView').hidden = true; $('joinView').hidden = false;
+    $('nickStep').hidden = true; $('pinStep').hidden = false; $('nickBtn').disabled = false;
+    $('joinError').textContent = msg || ''; leaving = false;
+  }
+  function showGame() { $('joinView').hidden = true; $('gameView').hidden = false; $('connBanner').hidden = true; }
+
+  /* ---------- Render ---------- */
+  function showSection(phase) {
+    ['LOBBY', 'QUESTION', 'REVEAL', 'PUZZLE', 'PODIUM'].forEach(p => { $('s_' + p).hidden = p !== phase; });
+  }
+  function lettersHtml(arr) { return arr.map(l => `<span class="chip">${esc(l)}</span>`).join(''); }
+
+  function render(s) {
+    $('nickLabel').textContent = '🚩 ' + s.team.name + ' · ' + s.player.nickname;
+    $('nickLabel').style.borderLeft = '8px solid ' + s.team.color; $('nickLabel').style.paddingLeft = '8px';
+    $('scoreLabel').textContent = 'ทีม ' + s.team.score.toLocaleString() + ' คะแนน';
+    $('letters').innerHTML = lettersHtml(s.letters);
+    showSection(s.phase);
+    if (s.phase === 'LOBBY') $('lobbyCount').textContent = 'ทีมของคุณมี ' + s.team.members + ' คน · ผู้เล่นทั้งหมด ' + s.playerCount + ' คน';
+    if (s.phase === 'QUESTION' && s.question) renderQuestion(s);
+    if (s.phase === 'REVEAL' && s.question) renderReveal(s);
+    if (s.phase === 'PUZZLE') renderPuzzle(s);
+    if (s.phase === 'PODIUM') renderPodium(s);
+  }
+
+  function renderQuestion(s) {
+    const q = s.question;
+    $('qCounter').textContent = 'ข้อ ' + s.qIndex + '/' + s.qTotal;
+    $('qText').textContent = q.question;
+    $('qImg').hidden = !q.image; if (q.image) $('qImg').src = q.image;
+    if (renderedQid !== q.id) {
+      renderedQid = q.id;
+      $('tiles').innerHTML = tilesHtml(q.choices, 'button');
+      $('tiles').querySelectorAll('.tile').forEach(b => b.onclick = () => answer(b.dataset.k));
+      $('answerError').textContent = '';
+    }
+    const mine = s.myAnswer;
+    $('waiting').hidden = !mine; $('tiles').hidden = !!mine;
+    if (mine) {
+      const k = mine.choice;
+      $('waitingChoice').className = 'tile ' + CHOICE[k].cls;
+      $('waitingChoice').innerHTML = `<span class="shape">${CHOICE[k].shape}</span><span class="txt">${esc(q.choices[k] || '')}</span>`;
+    }
+    tick();
+  }
+
+  setInterval(tick, 100);
+  function tick() {
+    if (!S || S.phase !== 'QUESTION' || !S.question) return;
+    const now = serverTime(), total = S.question.time * 1000, before = now < S.startMs;
+    $('getReady').hidden = !before || !!S.myAnswer;
+    $('readyNum').textContent = Math.max(1, Math.ceil((S.startMs - now) / 1000));
+    $('tiles').querySelectorAll('.tile').forEach(b => b.disabled = before || sending);
+    if (before) { $('tNum').textContent = ''; $('tBar').style.width = '100%'; return; }
+    const left = Math.max(0, S.endMs - now);
+    $('tNum').textContent = Math.ceil(left / 1000);
+    $('tBar').style.width = (left / total * 100) + '%';
+  }
+
+  function answer(k) {
+    if (sending || !S || S.myAnswer || !conn || !conn.open) return;
+    sending = true; sfx.tap();
+    S.myAnswer = { choice: k };               // ล็อกหน้าจอทันที
+    renderQuestion(S);
+    conn.send({ t: 'answer', choice: k });
+  }
+
+  function renderReveal(s) {
+    const q = s.question, mine = s.myAnswer, box = $('resultBox');
+    let html;
+    if (mine && mine.correct) {
+      box.className = 'result good';
+      html = `<div class="big">✓ ถูกต้อง!</div><div style="font-size:26px;">+${mine.points.toLocaleString()} คะแนนเข้าทีม</div>`;
+      if (mine.letter) html += `<div style="margin-top:10px;">ทีมได้รหัสลับ <span class="chip">${esc(mine.letter)}</span></div>`;
+    } else if (mine) {
+      box.className = 'result bad';
+      html = `<div class="big">✗ ยังไม่ถูก</div><div>คำตอบที่ถูกคือ ${CHOICE[q.correct].label}. ${esc(q.choices[q.correct])}</div>`;
+    } else {
+      box.className = 'result none';
+      html = `<div class="big">⏰ หมดเวลา</div><div>คำตอบที่ถูกคือ ${CHOICE[q.correct].label}. ${esc(q.choices[q.correct])}</div>`;
+    }
+    box.innerHTML = html;
+    $('resultStats').innerHTML =
+      `<span class="stat">🏅 ทีมอันดับ ${s.rank}</span><span class="stat">คุณทำได้ ${s.player.score.toLocaleString()}</span>` +
+      (s.player.streak >= 2 ? `<span class="stat">🔥 ตอบถูกติดกัน ${s.player.streak}</span>` : '');
+    const ex = $('resultExplain'); ex.hidden = !q.explanation; ex.textContent = q.explanation || '';
+    if (soundedQid !== q.id) { soundedQid = q.id; (mine && mine.correct) ? sfx.right() : sfx.wrong(); }
+  }
+
+  function renderPuzzle(s) {
+    $('puzzleHint').textContent = s.puzzle.hint || '-';
+    $('puzzleLetters').innerHTML = s.letters.length ? lettersHtml(s.letters) : '<span class="muted">ทีมยังไม่มีรหัสลับ</span>';
+    if (s.puzzle.solved) {
+      $('puzzleMsg').textContent = '🎉 ทีมของคุณไขสำเร็จแล้ว! รอครูไปขั้นถัดไป'; $('puzzleMsg').style.color = 'var(--ok)';
+      $('puzzleBtn').disabled = true; $('puzzleInput').disabled = true;
+    }
+  }
+  $('puzzleBtn').onclick = () => { if (conn && conn.open) conn.send({ t: 'puzzle', answer: $('puzzleInput').value }); };
+  $('puzzleInput').onkeydown = e => { if (e.key === 'Enter') $('puzzleBtn').click(); };
+
+  function renderPodium(s) {
+    const top3 = s.rank <= 3;
+    $('podiumIcon').textContent = s.rank === 1 ? '🏆' : (s.rank === 2 ? '🥈' : (s.rank === 3 ? '🥉' : '🎖️'));
+    $('podiumTitle').textContent = 'ทีม ' + s.team.name + ' ได้อันดับ ' + s.rank + '!';
+    $('podiumStats').innerHTML =
+      `<span class="stat">ทีม ${s.team.score.toLocaleString()} คะแนน</span><span class="stat">คุณทำได้ ${s.player.score.toLocaleString()}</span>` +
+      `<span class="stat">ตอบถูก ${s.player.correctCount} ข้อ</span><span class="stat">🔥 สูงสุด ${s.player.bestStreak}</span>`;
+    $('podiumLetters').innerHTML = lettersHtml(s.letters);
+    if (!podiumShown) { podiumShown = true; if (top3) { sfx.win(); confetti(120); } }
+  }
+
+  /* ---------- Boot ---------- */
+  const qp = new URLSearchParams(location.search).get('pin');
+  if (qp) $('pinInput').value = qp.replace(/\D/g, '');
+  if (saved && saved.token && saved.pin) {          // กลับเข้าเกมเดิมอัตโนมัติ
+    pin = saved.pin; token = saved.token; showGame();
+    $('connBanner').hidden = false;
+    connect(() => conn.send({ t: 'rejoin', token }));
+  }
+</script>
+</body>
+</html>

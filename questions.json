@@ -1,0 +1,13 @@
+{
+  "settings": {
+    "gameName": "เกมล่าขุมสมบัติ",
+    "puzzleHint": "นำตัวอักษรรหัสลับที่ได้จากทุกข้อมาเรียงตามลำดับ",
+    "puzzleAnswer": "ขมบ",
+    "puzzleBonus": 500
+  },
+  "questions": [
+    { "question": "จังหวัดน่านอยู่ภาคใดของประเทศไทย?", "image": "", "choice_a": "ภาคเหนือ", "choice_b": "ภาคใต้", "choice_c": "ภาคอีสาน", "choice_d": "ภาคกลาง", "correct": "a", "points": 1000, "time": 20, "letter": "ข", "explanation": "น่านอยู่ภาคเหนือตอนบน" },
+    { "question": "พระธาตุแช่แห้งเป็นพระธาตุประจำปีเกิดใด?", "image": "", "choice_a": "ปีกุน", "choice_b": "ปีเถาะ", "choice_c": "ปีชวด", "choice_d": "ปีมะเส็ง", "correct": "b", "points": 1000, "time": 20, "letter": "ม", "explanation": "" },
+    { "question": "ถนนคนเดินน่านเปิดวันใด?", "image": "", "choice_a": "ศุกร์-อาทิตย์", "choice_b": "จันทร์-อังคาร", "choice_c": "ทุกวัน", "choice_d": "พุธเท่านั้น", "correct": "a", "points": 1000, "time": 20, "letter": "บ", "explanation": "" }
+  ]
+}

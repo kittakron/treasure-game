@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ครูผู้ควบคุมเกม</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;800&display=swap">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<!-- ============ DASHBOARD ============ -->
+<div id="dashView" class="wrap">
+  <div class="row spread">
+    <div>
+      <h2 style="margin:0;" id="gameName">เกม</h2>
+      <span class="pill" id="phaseBadge"></span>
+      <span class="pill" id="pinBadge"></span>
+      <span class="pill" id="countBadge"></span>
+    </div>
+    <div class="row">
+      <a class="btn btn-ghost" id="projLink" href="projector.html" target="_blank" rel="noopener">🖥️ เปิดจอโปรเจกเตอร์</a>
+      <button class="btn btn-ghost" id="newGameTop">🔄 เกมใหม่</button>
+    </div>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" data-tab="play" aria-selected="true">🎮 ควบคุมเกม</button>
+    <button class="tab" role="tab" data-tab="questions" aria-selected="false">📝 คำถาม</button>
+    <button class="tab" role="tab" data-tab="settings" aria-selected="false">⚙️ ตั้งค่า</button>
+  </div>
+
+  <!-- ---- PLAY ---- -->
+  <section id="tab_play" class="stack">
+    <div class="card row spread">
+      <div>
+        <div class="muted">นักเรียนเปิดลิงก์นี้ แล้วกรอกรหัสเกม</div>
+        <div style="font-weight:600;word-break:break-all;" id="joinLink"></div>
+        <div id="netStatus" style="margin-top:4px;font-weight:600;" role="status">⏳ กำลังเชื่อมต่อ...</div>
+      </div>
+      <div class="bigpin" id="bigPin" style="font-size:56px;">------</div>
+    </div>
+    <div class="card" style="background:#fff7d6;">⚠️ <b>เกมทำงานในหน้านี้</b> — ให้เปิดหน้านี้ค้างไว้ตลอดเกม และอย่าสลับไปแท็บอื่นนานๆ (ไม่งั้นตัวจับเวลาอาจช้า) ถ้าเผลอปิด เปิดหน้านี้ใหม่ เกมจะต่อให้เอง</div>
+    <div class="card stack">
+      <div class="row spread">
+        <div id="stepInfo" style="font-size:18px;font-weight:600;"></div>
+        <div class="row">
+          <button class="btn btn-green btn-lg" id="nextBtn">▶ เริ่มเกม</button>
+        </div>
+      </div>
+      <div id="qPanel" hidden>
+        <div style="font-size:20px;font-weight:600;" id="qPanelText"></div>
+        <div class="row" style="margin:6px 0;">
+          <span class="pill" id="qPanelTimer"></span>
+          <span class="pill" id="qPanelAnswered"></span>
+          <span class="pill" id="qPanelLetter"></span>
+        </div>
+        <div id="qPanelChoices" class="grid grid-2"></div>
+      </div>
+      <div class="row">
+        <button class="btn btn-ghost btn-sm" id="endBtn">⏭️ ข้ามไปจบเกม</button>
+        <button class="btn btn-danger btn-sm" id="resetBtn">🔄 เกมใหม่ (ล้างผู้เล่น + สร้างรหัสใหม่)</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>🏅 อันดับทีม</h3>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>#</th><th>ทีม</th><th>สมาชิก</th><th>คะแนนทีม</th><th>ตอบถูก</th><th>รหัสลับที่ได้</th></tr></thead>
+          <tbody id="lbBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>👥 ผู้เล่นทั้งหมด</h3>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>ทีม</th><th>ชื่อ</th><th>คะแนนส่วนตัว</th><th></th></tr></thead>
+          <tbody id="playersBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---- QUESTIONS ---- -->
+  <section id="tab_questions" class="stack" hidden>
+    <div class="card">
+      <div class="row spread">
+        <h3 style="margin:0;">📝 คำถามทั้งหมด <span class="muted" id="qCount"></span></h3>
+        <div class="row">
+          <button class="btn btn-primary btn-sm" id="addQBtn">＋ เพิ่มคำถาม</button>
+          <button class="btn btn-ghost btn-sm" id="exportBtn">⬇️ ส่งออก JSON</button>
+          <button class="btn btn-ghost btn-sm" id="sampleBtn">↺ โหลดคำถามตัวอย่าง</button>
+          <button class="btn btn-ghost btn-sm" id="importBtn">⬆️ นำเข้า JSON</button>
+          <input type="file" id="importFile" accept=".json,application/json" hidden>
+        </div>
+      </div>
+      <p class="muted" style="margin:6px 0 0;">คำถามถูกเก็บในเบราว์เซอร์เครื่องนี้ — กด "ส่งออก JSON" เก็บไว้ หรือเอาไปแทนไฟล์ questions.json ใน repo เพื่อให้ถาวร</p>
+      <div id="qList"></div>
+    </div>
+  </section>
+
+  <!-- ---- SETTINGS ---- -->
+  <section id="tab_settings" class="stack" hidden>
+    <div class="card">
+      <h3>⚙️ ตั้งค่าเกม</h3>
+      <label for="set_name">ชื่อเกม</label>
+      <input id="set_name" maxlength="100">
+      <h3 style="margin-top:18px;">🧩 ห้องสมบัติ (ปริศนาปิดท้าย)</h3>
+      <p class="muted" style="margin:0;">เว้นคำตอบว่างไว้ = ไม่มีห้องสมบัติ เกมจะจบที่โพเดียมเลย</p>
+      <label for="set_hint">คำใบ้</label>
+      <input id="set_hint" maxlength="500">
+      <label for="set_answer">คำตอบ <span class="muted" id="lettersHelp"></span></label>
+      <input id="set_answer" maxlength="100">
+      <label for="set_bonus">โบนัสคะแนนเมื่อไขถูก</label>
+      <input id="set_bonus" type="number" min="0" max="10000" step="50">
+      <div class="row" style="margin-top:14px;">
+        <button class="btn btn-dark" id="saveSettingsBtn">บันทึก</button>
+        <span id="settingsMsg" role="status"></span>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ============ QUESTION DIALOG ============ -->
+<dialog id="qDialog">
+  <form id="qForm" method="dialog">
+    <h3 id="qDialogTitle">เพิ่มคำถาม</h3>
+    <input type="hidden" id="f_id">
+    <label for="f_question">คำถาม</label>
+    <textarea id="f_question" rows="2" maxlength="500" required></textarea>
+    <label for="f_image">ลิงก์รูปภาพ (ไม่บังคับ)</label>
+    <input id="f_image" placeholder="https://...">
+    <label>ตัวเลือก (ติ๊กวงกลมหน้าข้อที่ถูก)</label>
+    <div id="f_choices"></div>
+    <div class="form2">
+      <div><label for="f_time">เวลาตอบ (วินาที)</label><input id="f_time" type="number" min="5" max="300" value="20"></div>
+      <div><label for="f_points">คะแนนเต็ม (0 = ไม่มีคะแนน)</label><input id="f_points" type="number" min="0" max="10000" step="100" value="1000"></div>
+      <div><label for="f_letter">ตัวอักษรรหัสลับ (ไม่บังคับ)</label><input id="f_letter" maxlength="10"></div>
+      <div><label for="f_expl">คำอธิบายเฉลย (ไม่บังคับ)</label><input id="f_expl" maxlength="1000"></div>
+    </div>
+    <p id="f_error" style="color:#c0392b;min-height:1.4em;" role="alert"></p>
+    <div class="row" style="justify-content:flex-end;">
+      <button type="button" class="btn btn-ghost" id="f_cancel">ยกเลิก</button>
+      <button type="button" class="btn btn-dark" id="f_save">บันทึก</button>
+    </div>
+  </form>
+</dialog>
+
+
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="assets/app.js"></script>
+<script src="assets/engine.js"></script>
+<script>
+  const $ = id => document.getElementById(id);
+  const PHASE_TH = { LOBBY: 'รอผู้เล่น', QUESTION: 'กำลังตอบ', REVEAL: 'เฉลย', PUZZLE: 'ห้องสมบัติ', PODIUM: 'จบเกม' };
+  let peer = null;
+  const conns = new Map();            // conn -> { role, token }
+  let pushQueued = false;
+
+  /* ---------- เครือข่าย (PeerJS) ---------- */
+  function randomPin() { return String(Math.floor(Math.random() * 1000000)).padStart(6, '0'); }
+  function baseUrl() { return location.origin + location.pathname.replace(/[^/]*$/, ''); }
+
+  function openPeer(pin, resuming, tries) {
+    tries = tries || 0;
+    if (peer) { try { peer.destroy(); } catch (e) {} }
+    $('netStatus').textContent = '⏳ กำลังเชื่อมต่อ...';
+    peer = new Peer('thg-' + pin);
+    peer.on('open', () => {
+      $('netStatus').textContent = '🟢 พร้อมรับผู้เล่น'; $('netStatus').style.color = 'var(--ok)';
+      $('bigPin').textContent = pin;
+      $('joinLink').textContent = baseUrl() + 'index.html?pin=' + pin;
+      $('projLink').href = 'projector.html?pin=' + pin;
+    });
+    peer.on('connection', setupConn);
+    peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) {} });
+    peer.on('error', err => {
+      if (err.type === 'unavailable-id') {
+        if (resuming && tries < 8) return setTimeout(() => openPeer(pin, true, tries + 1), 3000); // รอให้ id เก่าหลุดจากเซิร์ฟเวอร์
+        const np = randomPin(); Engine.newGame(np); return openPeer(np, false);
+      }
+      $('netStatus').textContent = '🔴 เชื่อมต่อไม่ได้ (' + err.type + ') — ตรวจอินเทอร์เน็ตแล้วรีเฟรชหน้านี้';
+      $('netStatus').style.color = 'var(--bad)';
+    });
+  }
+
+  function setupConn(conn) {
+    conns.set(conn, { role: null, token: null });
+    conn.on('data', m => onMsg(conn, m));
+    conn.on('close', () => conns.delete(conn));
+    conn.on('error', () => conns.delete(conn));
+  }
+
+  function send(conn, obj) { try { if (conn.open) conn.send(obj); } catch (e) {} }
+
+  function onMsg(conn, m) {
+    const info = conns.get(conn); if (!info || !m || typeof m !== 'object') return;
+    switch (m.t) {
+      case 'join': {
+        const r = Engine.join(m.team, m.nick);
+        if (!r.ok) return send(conn, { t: 'error', msg: r.msg });
+        info.role = 'player'; info.token = r.token;
+        send(conn, { t: 'joined', token: r.token, nickname: r.nickname, teamName: r.teamName });
+        return pushAll();
+      }
+      case 'rejoin': {
+        const s = Engine.playerState(String(m.token || ''));
+        if (!s) return send(conn, { t: 'gone', msg: 'ไม่พบผู้เล่น อาจมีการเริ่มเกมใหม่ กรุณาเข้าร่วมอีกครั้ง' });
+        info.role = 'player'; info.token = m.token;
+        return send(conn, { t: 'state', s });
+      }
+      case 'projector':
+        info.role = 'projector';
+        return send(conn, { t: 'state', s: Engine.projectorState() });
+      case 'answer': {
+        if (info.role !== 'player') return;
+        const r = Engine.answer(info.token, String(m.choice || ''));
+        return send(conn, { t: 'answerResult', ...r });
+      }
+      case 'puzzle': {
+        if (info.role !== 'player') return;
+        const r = Engine.puzzle(info.token, String(m.answer || ''));
+        send(conn, { t: 'puzzleResult', ...r });
+        return pushAll();
+      }
+    }
+  }
+
+  function pushAll() {
+    conns.forEach((info, conn) => {
+      if (info.role === 'projector') send(conn, { t: 'state', s: Engine.projectorState() });
+      else if (info.role === 'player') {
+        const s = Engine.playerState(info.token);
+        if (s) send(conn, { t: 'state', s }); else { send(conn, { t: 'gone', msg: 'คุณถูกนำออกจากเกม หรือเกมถูกเริ่มใหม่' }); info.role = null; }
+      }
+    });
+  }
+  // รวมการอัปเดตที่เกิดถี่ๆ (เช่น ทุกคนกดตอบพร้อมกัน) ให้ส่งครั้งเดียว
+  Engine.onChange = () => {
+    if (pushQueued) return;
+    pushQueued = true;
+    setTimeout(() => { pushQueued = false; pushAll(); renderState(); }, 80);
+  };
+  setInterval(() => Engine.tick(), 500);
+  setInterval(pushAll, 5000);          // heartbeat ให้เวลาตรงกันและกันหลุด
+
+  /* ---------- Tabs ---------- */
+  document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+    document.querySelectorAll('.tab').forEach(x => x.setAttribute('aria-selected', x === t));
+    ['play', 'questions', 'settings'].forEach(n => $('tab_' + n).hidden = n !== t.dataset.tab);
+  });
+
+  /* ---------- Play ---------- */
+  let T = null;
+  function nextLabel(t) {
+    switch (t.phase) {
+      case 'LOBBY': return '▶ เริ่มเกม';
+      case 'QUESTION': return '⏩ เฉลยเลย';
+      case 'REVEAL': return t.isLast ? (t.hasPuzzle ? '🧩 เปิดห้องสมบัติ' : '🏆 จบเกม / โพเดียม') : '➡️ ข้อถัดไป';
+      case 'PUZZLE': return '🏆 ไปโพเดียม';
+      default: return 'เกมจบแล้ว';
+    }
+  }
+  function renderState() {
+    T = Engine.teacherState(); syncClock(T.serverNow); const t = T;
+    $('gameName').textContent = t.gameName;
+    $('phaseBadge').textContent = 'สถานะ: ' + (PHASE_TH[t.phase] || t.phase);
+    $('pinBadge').textContent = 'รหัสเกม: ' + t.pin;
+    $('countBadge').textContent = '👥 ' + t.playerCount + ' คน';
+    $('nextBtn').textContent = nextLabel(t);
+    $('nextBtn').disabled = t.phase === 'PODIUM';
+    $('stepInfo').textContent = t.phase === 'LOBBY'
+      ? 'ให้นักเรียนกรอกรหัสเกม ' + t.pin + ' และตั้งชื่อทีม (ชื่อทีมเดียวกัน = ทีมเดียวกัน) · มี ' + t.questionCount + ' คำถาม'
+      : (t.question ? 'ข้อ ' + t.qIndex + '/' + t.qTotal : '');
+
+    const qp = $('qPanel');
+    if (t.question) {
+      qp.hidden = false; const q = t.question;
+      $('qPanelText').textContent = q.question;
+      $('qPanelAnswered').textContent = 'ตอบแล้ว ' + t.answered + '/' + t.playerCount;
+      $('qPanelLetter').textContent = q.letter ? 'รหัสลับข้อนี้: ' + q.letter : 'ไม่มีรหัสลับ';
+      $('qPanelChoices').innerHTML = Object.keys(q.choices).map(k => {
+        const right = k === q.correct;
+        return `<div class="tile ${CHOICE[k].cls} ${right ? 'right' : 'dim'}" style="min-height:0;padding:10px 14px;font-size:16px;">
+          <span class="shape" style="font-size:22px;">${CHOICE[k].shape}</span><span class="txt">${esc(q.choices[k])}</span>
+          <span class="count" style="font-size:20px;">${t.distribution ? t.distribution[k] : 0}</span></div>`;
+      }).join('');
+    } else qp.hidden = true;
+    updateTimer();
+
+    $('lbBody').innerHTML = t.leaderboard.length ? t.leaderboard.map(r =>
+      `<tr><td>${r.rank}</td><td style="border-left:8px solid ${esc(r.color)};"><b>${esc(r.name)}</b></td><td>${r.members} คน</td><td>${r.score.toLocaleString()}</td><td>${r.correctCount}</td>
+       <td>${r.letters.map(l => `<span class="chip" style="min-width:28px;height:28px;font-size:16px;">${esc(l)}</span>`).join('')}</td></tr>`
+    ).join('') : '<tr><td colspan="6" class="muted">ยังไม่มีทีม</td></tr>';
+    $('playersBody').innerHTML = t.players.map(p =>
+      `<tr><td>${esc(p.team)}</td><td>${esc(p.nickname)}</td><td>${p.score.toLocaleString()}</td>
+       <td><button class="btn btn-ghost btn-sm" data-kick="${p.id}" aria-label="เตะ ${esc(p.nickname)}">✕</button></td></tr>`
+    ).join('') || '<tr><td colspan="4" class="muted">ยังไม่มีผู้เล่น</td></tr>';
+  }
+  function updateTimer() {
+    if (!T || T.phase !== 'QUESTION') { $('qPanelTimer').textContent = T && T.phase === 'REVEAL' ? 'เฉลยแล้ว' : ''; return; }
+    const n = Date.now();
+    $('qPanelTimer').textContent = n < T.startMs ? 'เตรียมตัว...' : '⏱ เหลือ ' + Math.ceil(Math.max(0, T.endMs - n) / 1000) + ' วิ';
+  }
+  setInterval(updateTimer, 250);
+
+  function startNewGame() {
+    const pin = randomPin();
+    Engine.newGame(pin);
+    conns.forEach((info, conn) => { send(conn, { t: 'gone', msg: 'เกมถูกเริ่มใหม่ กรุณาเข้าร่วมอีกครั้ง' }); try { conn.close(); } catch (e) {} });
+    conns.clear();
+    openPeer(pin, false); renderState();
+  }
+  $('nextBtn').onclick = () => { const r = Engine.nextStep(); if (!r.ok) alert(r.msg); };
+  $('endBtn').onclick = () => { if (confirm('ข้ามไปหน้าจบเกมเลยใช่ไหม?')) Engine.endGame(); };
+  const confirmNew = () => { if (confirm('เริ่มเกมใหม่? ผู้เล่นและคะแนนทั้งหมดจะถูกล้าง และจะได้รหัสเกมใหม่ (คำถามยังอยู่)')) startNewGame(); };
+  $('resetBtn').onclick = confirmNew; $('newGameTop').onclick = confirmNew;
+  $('playersBody').onclick = e => {
+    const b = e.target.closest('[data-kick]'); if (!b || !confirm('เตะผู้เล่นคนนี้ออก?')) return;
+    const token = Engine.kick(parseInt(b.dataset.kick, 10));
+    conns.forEach((info, conn) => { if (info.token === token) { send(conn, { t: 'gone', msg: 'คุณถูกนำออกจากเกม' }); info.role = null; } });
+  };
+
+  /* ---------- Questions CMS ---------- */
+  let questions = [];
+  function renderQuestions() {
+    questions = Engine.getQuestions();
+    $('qCount').textContent = '(' + questions.length + ' ข้อ)';
+    $('qList').innerHTML = questions.length ? questions.map((q, i) => `
+      <div class="qitem">
+        <div class="num">${i + 1}</div>
+        <div class="body">
+          <b>${esc(q.question)}</b>
+          <div class="opts">${['a', 'b', 'c', 'd'].filter(k => q['choice_' + k]).map(k =>
+            `<span class="${k === q.correct ? 'ok' : ''}">${CHOICE[k].shape} ${esc(q['choice_' + k])}${k === q.correct ? ' ✓' : ''}</span>`).join('')}</div>
+          <div class="muted" style="font-size:13px;margin-top:4px;">⏱ ${q.time} วิ · ${q.points} คะแนน${q.letter ? ' · รหัสลับ ' + esc(q.letter) : ''}</div>
+        </div>
+        <div class="acts">
+          <button class="btn btn-ghost btn-sm" data-move="up" data-id="${q.id}" aria-label="เลื่อนขึ้น">▲</button>
+          <button class="btn btn-ghost btn-sm" data-move="down" data-id="${q.id}" aria-label="เลื่อนลง">▼</button>
+          <button class="btn btn-ghost btn-sm" data-edit="${q.id}">แก้ไข</button>
+          <button class="btn btn-danger btn-sm" data-del="${q.id}">ลบ</button>
+        </div>
+      </div>`).join('') : '<p class="muted">ยังไม่มีคำถาม กด "เพิ่มคำถาม" ได้เลย</p>';
+    const l = questions.map(q => q.letter).filter(Boolean).join('');
+    $('lettersHelp').textContent = l ? '(รหัสลับเรียงตามข้อ: ' + l + ')' : '';
+  }
+  $('qList').onclick = e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.edit) return openDialog(questions.find(q => String(q.id) === b.dataset.edit));
+    if (b.dataset.move) return Engine.moveQuestion(parseInt(b.dataset.id, 10), b.dataset.move);
+    if (b.dataset.del && confirm('ลบคำถามข้อนี้?')) { const r = Engine.deleteQuestion(parseInt(b.dataset.del, 10)); if (!r.ok) alert(r.msg); }
+  };
+
+  $('f_choices').innerHTML = ['a', 'b', 'c', 'd'].map(k =>
+    `<div class="choice-row"><span class="shape ${CHOICE[k].cls}">${CHOICE[k].shape}</span>
+     <input type="text" id="f_c_${k}" maxlength="200" placeholder="ตัวเลือก ${CHOICE[k].label}${k > 'b' ? ' (ไม่บังคับ)' : ''}" aria-label="ตัวเลือก ${CHOICE[k].label}">
+     <input type="radio" name="f_correct" value="${k}" aria-label="ข้อ ${CHOICE[k].label} คือเฉลย"></div>`).join('');
+  function openDialog(q) {
+    q = q || { id: 0, question: '', image: '', choice_a: '', choice_b: '', choice_c: '', choice_d: '', correct: 'a', points: 1000, time: 20, letter: '', explanation: '' };
+    $('qDialogTitle').textContent = q.id ? 'แก้ไขคำถาม' : 'เพิ่มคำถาม';
+    $('f_id').value = q.id; $('f_question').value = q.question; $('f_image').value = q.image;
+    ['a', 'b', 'c', 'd'].forEach(k => $('f_c_' + k).value = q['choice_' + k]);
+    document.querySelector(`input[name=f_correct][value=${q.correct}]`).checked = true;
+    $('f_time').value = q.time; $('f_points').value = q.points; $('f_letter').value = q.letter; $('f_expl').value = q.explanation;
+    $('f_error').textContent = ''; $('qDialog').showModal();
+  }
+  $('addQBtn').onclick = () => openDialog();
+  $('f_cancel').onclick = () => $('qDialog').close();
+  $('f_save').onclick = () => {
+    const correct = (document.querySelector('input[name=f_correct]:checked') || {}).value || '';
+    const r = Engine.saveQuestion({
+      id: $('f_id').value, question: $('f_question').value, image: $('f_image').value,
+      choice_a: $('f_c_a').value, choice_b: $('f_c_b').value, choice_c: $('f_c_c').value, choice_d: $('f_c_d').value,
+      correct, time: $('f_time').value, points: $('f_points').value, letter: $('f_letter').value, explanation: $('f_expl').value,
+    });
+    if (!r.ok) { $('f_error').textContent = r.msg; return; }
+    $('qDialog').close();
+  };
+
+  $('exportBtn').onclick = () => {
+    const data = { settings: Engine.getSettings(), questions: Engine.getQuestions().map(({ id, ...rest }) => rest) };
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+    a.download = 'questions.json'; a.click(); URL.revokeObjectURL(a.href);
+  };
+  $('importBtn').onclick = () => $('importFile').click();
+  $('importFile').onchange = async e => {
+    const file = e.target.files[0]; e.target.value = ''; if (!file) return;
+    let data; try { data = JSON.parse(await file.text()); } catch (err) { return alert('อ่านไฟล์ไม่ได้: ไม่ใช่ JSON'); }
+    const items = Array.isArray(data) ? data : data.questions;
+    const replace = confirm('นำเข้าแบบ "แทนที่คำถามเดิมทั้งหมด"?\n\nตกลง = แทนที่ทั้งหมด\nยกเลิก = เพิ่มต่อท้ายคำถามเดิม');
+    const r = Engine.importQuestions(items, replace);
+    if (r.ok && data.settings && replace) { Engine.setSettings(data.settings); loadSettingsForm(); }
+    alert(r.ok ? 'นำเข้าสำเร็จ ' + r.count + ' ข้อ' : r.msg);
+  };
+  async function loadSample() {
+    try {
+      const d = await (await fetch('questions.json', { cache: 'no-store' })).json();
+      Engine.setContent(Array.isArray(d) ? d : d.questions, Array.isArray(d) ? null : d.settings);
+      loadSettingsForm(); renderQuestions(); renderState(); return true;
+    } catch (e) { return false; }
+  }
+  $('sampleBtn').onclick = async () => {
+    if (!confirm('แทนที่คำถามทั้งหมดด้วยไฟล์ questions.json ใน repo?')) return;
+    if (T && T.phase !== 'LOBBY') return alert('ทำได้เฉพาะตอนอยู่หน้ารอผู้เล่น');
+    if (!(await loadSample())) alert('โหลด questions.json ไม่สำเร็จ');
+  };
+
+  /* ---------- Settings ---------- */
+  function loadSettingsForm() {
+    const s = Engine.getSettings();
+    $('set_name').value = s.gameName; $('set_hint').value = s.puzzleHint; $('set_answer').value = s.puzzleAnswer; $('set_bonus').value = s.puzzleBonus;
+  }
+  $('saveSettingsBtn').onclick = () => {
+    Engine.setSettings({ gameName: $('set_name').value, puzzleHint: $('set_hint').value, puzzleAnswer: $('set_answer').value, puzzleBonus: $('set_bonus').value });
+    $('settingsMsg').textContent = '✅ บันทึกแล้ว'; $('settingsMsg').style.color = 'var(--ok)';
+  };
+
+  // เมื่อคำถาม/ตั้งค่าเปลี่ยน ให้วาดรายการใหม่ด้วย
+  const baseChange = Engine.onChange;
+  Engine.onChange = () => { baseChange(); renderQuestions(); };
+
+  /* ---------- Boot ---------- */
+  (async () => {
+    if (!Engine.loadContent()) await loadSample();
+    loadSettingsForm(); renderQuestions();
+    const saved = Engine.resume();
+    if (saved) { openPeer(saved.pin, true); }
+    else { const pin = randomPin(); Engine.newGame(pin); openPeer(pin, false); }
+    renderState();
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>จอโปรเจกเตอร์</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;800&display=swap">
+  <link rel="stylesheet" href="assets/style.css">
+  <style>
+    body { overflow-x: hidden; }
+    .stage { min-height: 100vh; padding: 28px 40px; display: flex; flex-direction: column; gap: 18px; align-items: center; }
+    .stage h1 { font-size: 44px; }
+    .head { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 16px; font-size: 22px; font-weight: 600; }
+    .qtext { font-size: 38px; }
+    .bignum { font-size: 90px; font-weight: 800; color: var(--gold); line-height: 1; }
+    .dist { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; width: 100%; align-items: end; height: 120px; }
+    .dist .bar { border-radius: 8px 8px 0 0; min-height: 6px; display: flex; align-items: flex-start; justify-content: center; font-size: 28px; font-weight: 800; padding-top: 4px; }
+    .two { display: grid; grid-template-columns: 1.3fr 1fr; gap: 28px; width: 100%; align-items: start; }
+    @media (max-width: 900px) { .two { grid-template-columns: 1fr; } .stage { padding: 16px; } }
+  </style>
+</head>
+<body>
+<div class="stage" id="stage"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="assets/app.js"></script>
+<script>
+  const stage = document.getElementById('stage');
+  let D = null, lastKey = '', soundedWin = false, lastCount = -1;
+
+  function joinUrl() { return location.host + location.pathname.replace(/[^/]*$/, ''); }
+
+  function render(d) {
+    // วาดใหม่เฉพาะเมื่อข้อมูลเปลี่ยน (กันภาพกระพริบ) ยกเว้นหน้าคำถามที่มีตัวจับเวลา
+    const key = JSON.stringify(d, (k, v) => k === 'serverNow' ? undefined : v);
+    if (key === lastKey) return;
+    lastKey = key;
+
+    if (d.phase === 'LOBBY') {
+      stage.innerHTML = `
+        <div style="margin-top:4vh;font-size:30px;">เข้าร่วมที่ <b>${esc(joinUrl())}</b> แล้วใส่รหัสเกม</div>
+        <div class="bigpin" aria-label="รหัสเกม">${esc(d.pin)}</div>
+        <h1>${esc(d.gameName)}</h1>
+        <div class="pill" style="font-size:22px;">👥 ${d.teams.length} ทีม · ${d.playerCount} คน</div>
+        <div class="grid grid-2" style="width:100%;max-width:1100px;">${d.teams.map(t => `<div class="card" style="border-top:8px solid ${esc(t.color)};"><b style="font-size:22px;">${esc(t.name)}</b> <span class="muted">(${t.members.length})</span><div>${t.members.map(n => `<span class="pill">${esc(n)}</span>`).join(' ')}</div></div>`).join('') || '<span style="opacity:.7;">รอทีมเข้าร่วม...</span>'}</div>`;
+      return;
+    }
+
+    if (d.phase === 'QUESTION' || d.phase === 'REVEAL') {
+      const q = d.question, reveal = d.phase === 'REVEAL';
+      const dist = d.distribution || {};
+      const maxC = Math.max(1, ...Object.values(dist));
+      const tiles = Object.keys(q.choices).map(k => {
+        const cls = reveal ? (k === q.correct ? 'right' : 'dim') : '';
+        return `<div class="tile ${CHOICE[k].cls} ${cls}"><span class="shape">${CHOICE[k].shape}</span><span class="txt">${esc(q.choices[k])}</span>${reveal ? `<span class="count">${dist[k] || 0}</span>` : ''}</div>`;
+      }).join('');
+      const lb = reveal ? `<div><h2 style="text-align:center;">🏅 อันดับทีม</h2><div class="lb">${d.leaderboard.map(r =>
+        `<div class="lb-row"><span class="rk">${r.rank}</span><span class="nm" style="border-left:8px solid ${esc(r.color)};padding-left:8px;">${esc(r.name)}</span><span class="sc">${r.score.toLocaleString()}</span></div>`).join('')}</div></div>` : '';
+      stage.innerHTML = `
+        <div class="head"><span class="pill">ข้อ ${d.qIndex}/${d.qTotal}</span><span class="pill">รหัสเกม ${esc(d.pin)}</span>
+          <span id="answered" class="pill">${reveal ? 'ตอบแล้ว ' + d.answered + '/' + d.playerCount : ''}</span></div>
+        <div class="qtext">${esc(q.question)}</div>
+        ${q.image ? `<img class="qimg" src="${esc(q.image)}" alt="">` : ''}
+        ${reveal ? '' : `<div class="row" style="width:100%;"><div class="timerbar" style="flex:1;"><i id="pBar"></i></div><div class="bignum" id="pNum" style="min-width:110px;text-align:center;"></div></div>
+          <div id="pReady" class="bignum" hidden></div>`}
+        <div class="two" style="${reveal ? '' : 'grid-template-columns:1fr;'}">
+          <div class="stack"><div class="tiles big">${tiles}</div>
+            ${reveal && q.explanation ? `<div class="card">${esc(q.explanation)}</div>` : ''}</div>
+          ${lb}
+        </div>`;
+      return;
+    }
+
+    if (d.phase === 'PUZZLE') {
+      stage.innerHTML = `
+        <div style="font-size:90px;margin-top:6vh;">🧩</div><h1>ห้องสมบัติ</h1>
+        <div class="qtext" style="max-width:900px;">${esc(d.puzzleHint || 'นำรหัสลับมาเรียงเป็นคำตอบ')}</div>
+        <div style="font-size:24px;">ไขสำเร็จแล้ว ${d.solvers.length} ทีม</div>
+        <div>${d.solvers.map(n => `<span class="nick">✅ ${esc(n)}</span>`).join('')}</div>`;
+      return;
+    }
+
+    if (d.phase === 'PODIUM') {
+      const t = d.leaderboard, by = i => t[i] ? `${esc(t[i].name)}<br>${t[i].score.toLocaleString()}` : '-';
+      stage.innerHTML = `
+        <h1 style="margin-top:3vh;">🏆 ทีมชนะเลิศ</h1>
+        <div class="podium">
+          <div class="step p2"><div style="font-size:40px;">🥈</div><div class="who">${by(1)}</div></div>
+          <div class="step p1"><div style="font-size:50px;">🥇</div><div class="who">${by(0)}</div></div>
+          <div class="step p3"><div style="font-size:40px;">🥉</div><div class="who">${by(2)}</div></div>
+        </div>
+        <div class="lb" style="max-width:700px;">${t.slice(3).map(r => `<div class="lb-row"><span class="rk">${r.rank}</span><span class="nm">${esc(r.name)}</span><span class="sc">${r.score.toLocaleString()}</span></div>`).join('')}</div>`;
+      if (!soundedWin) { soundedWin = true; sfx.win(); confetti(160); }
+      return;
+    }
+  }
+
+  // ตัวจับเวลา (วาดทับเฉพาะตัวเลข/แถบ ไม่ต้องวาดทั้งหน้า)
+  setInterval(() => {
+    if (!D || D.phase !== 'QUESTION') return;
+    const now = serverTime(), total = D.question.time * 1000;
+    const num = document.getElementById('pNum'), bar = document.getElementById('pBar'), ready = document.getElementById('pReady');
+    if (!num) return;
+    if (now < D.startMs) {
+      ready.hidden = false; num.textContent = '';
+      ready.textContent = 'เตรียมตัว... ' + Math.max(1, Math.ceil((D.startMs - now) / 1000));
+      bar.style.width = '100%';
+    } else {
+      ready.hidden = true;
+      const left = Math.max(0, D.endMs - now);
+      num.textContent = Math.ceil(left / 1000);
+      bar.style.width = (left / total * 100) + '%';
+    }
+    const a = document.getElementById('answered');
+    if (a) a.textContent = 'ตอบแล้ว ' + D.answered + '/' + D.playerCount;
+  }, 100);
+
+  let peer = null, conn = null, retry = null;
+  const pin = new URLSearchParams(location.search).get('pin') || '';
+  function status(msg) { if (!D) stage.innerHTML = `<div class="screen"><h1>${esc(msg)}</h1></div>`; }
+  function connect() {
+    clearTimeout(retry); retry = null;
+    if (!pin) return status('เปิดจอนี้จากปุ่ม "เปิดจอโปรเจกเตอร์" ในหน้าครู');
+    status('กำลังเชื่อมต่อเกม ' + pin + '...');
+    if (peer && !peer.destroyed) { try { peer.destroy(); } catch (e) {} }
+    peer = new Peer();
+    const again = () => { if (!retry) retry = setTimeout(connect, 3000); };
+    peer.on('error', again);
+    peer.on('open', () => {
+      conn = peer.connect('thg-' + pin, { reliable: true });
+      conn.on('open', () => conn.send({ t: 'projector' }));
+      conn.on('data', m => { if (m && m.t === 'state') { D = m.s; syncClock(D.serverNow); render(D); } });
+      conn.on('close', again); conn.on('error', again);
+    });
+  }
+  connect();
+</script>
+</body>
+</html>
