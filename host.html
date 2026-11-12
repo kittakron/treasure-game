@@ -97,7 +97,7 @@
           <input type="file" id="importFile" accept=".json,application/json" hidden>
         </div>
       </div>
-      <p class="muted" style="margin:6px 0 0;">คำถามถูกเก็บในเบราว์เซอร์เครื่องนี้ — กด "ส่งออก JSON" เก็บไว้ หรือเอาไปแทนไฟล์ questions.json ใน repo เพื่อให้ถาวร</p>
+      <p class="muted" style="margin:6px 0 0;">คำถามถูกเก็บในเบราว์เซอร์เครื่องนี้ — กด "ส่งออก JSON" เก็บไว้ หรือเอาไปแทนไฟล์ questions.json ใน repo เพื่อให้ถาวร (หมายเหตุ: ทุกครั้งที่เปิด/รีเฟรชหน้านี้ตอนอยู่หน้ารอผู้เล่น ระบบจะโหลดคำถามจาก questions.json ใน repo ทับของเดิม)</p>
       <div id="qList"></div>
     </div>
   </section>
@@ -399,7 +399,10 @@
   };
   async function loadSample() {
     try {
-      const d = await (await fetch('questions.json', { cache: 'no-store' })).json();
+      // ?t=... + no-store = ดึงไฟล์ล่าสุดจากเซิร์ฟเวอร์ทุกครั้ง ไม่ใช้แคช
+      const res = await fetch('questions.json?t=' + Date.now(), { cache: 'no-store' });
+      if (!res.ok) return false;
+      const d = await res.json();
       Engine.setContent(Array.isArray(d) ? d : d.questions, Array.isArray(d) ? null : d.settings);
       loadSettingsForm(); renderQuestions(); renderState(); return true;
     } catch (e) { return false; }
@@ -426,9 +429,12 @@
 
   /* ---------- Boot ---------- */
   (async () => {
-    if (!Engine.loadContent()) await loadSample();
-    loadSettingsForm(); renderQuestions();
+    Engine.loadContent();                          // โหลดของเก่าที่เก็บไว้ก่อน (ใช้เป็นตัวสำรอง)
     const saved = Engine.resume();
+    const midGame = saved && saved.phase !== 'LOBBY';
+    // ถ้าไม่ได้อยู่กลางเกม → ใช้ questions.json ล่าสุดจาก repo เสมอ (ถ้าโหลดไม่ได้ จะใช้ของที่เก็บไว้แทน)
+    if (!midGame) await loadSample();
+    loadSettingsForm(); renderQuestions();
     if (saved) { openPeer(saved.pin, true); }
     else { const pin = randomPin(); Engine.newGame(pin); openPeer(pin, false); }
     renderState();
