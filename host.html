@@ -156,6 +156,7 @@
 <script>
   const $ = id => document.getElementById(id);
   const PHASE_TH = { LOBBY: 'รอผู้เล่น', QUESTION: 'กำลังตอบ', REVEAL: 'เฉลย', PUZZLE: 'ห้องสมบัติ', PODIUM: 'จบเกม' };
+  let editorOnly = false;   // true = projector.html กำลังรันเกมอยู่ → หน้านี้ใช้แก้คำถามอย่างเดียว
   let peer = null;
   const conns = new Map();            // conn -> { role, token }
   let pushQueued = false;
@@ -265,6 +266,7 @@
     }
   }
   function renderState() {
+    if (editorOnly) return;
     T = Engine.teacherState(); syncClock(T.serverNow); const t = T;
     $('gameName').textContent = t.gameName;
     $('phaseBadge').textContent = 'สถานะ: ' + (PHASE_TH[t.phase] || t.phase);
@@ -430,6 +432,17 @@
   /* ---------- Boot ---------- */
   (async () => {
     Engine.loadContent();                          // โหลดของเก่าที่เก็บไว้ก่อน (ใช้เป็นตัวสำรอง)
+    // ถ้าหน้า projector.html เปิดรันเกมอยู่ในเบราว์เซอร์นี้ → ห้ามเปิดเกมซ้อน (จะทำให้รหัสเกมชนกัน)
+    const liveAt = parseInt(localStorage.getItem('thg_live'), 10) || 0;
+    if (Date.now() - liveAt < 6000) {
+      editorOnly = true;
+      document.querySelector('[data-tab=play]').hidden = true;
+      $('projLink').hidden = true; $('newGameTop').hidden = true;
+      $('dashView').insertAdjacentHTML('afterbegin', '<div class="card" style="background:#fff7d6;margin-bottom:12px;">ℹ️ <b>โหมดแก้คำถามอย่างเดียว</b> — เกมกำลังรันอยู่ที่หน้าจอโปรเจกเตอร์ (projector.html) ใช้ปุ่มควบคุมที่นั่นได้เลย หน้านี้ไว้แก้/ส่งออกคำถามเท่านั้น</div>');
+      document.querySelector('[data-tab=questions]').click();
+      loadSettingsForm(); renderQuestions();
+      return;
+    }
     const saved = Engine.resume();
     const midGame = saved && saved.phase !== 'LOBBY';
     // ถ้าไม่ได้อยู่กลางเกม → ใช้ questions.json ล่าสุดจาก repo เสมอ (ถ้าโหลดไม่ได้ จะใช้ของที่เก็บไว้แทน)

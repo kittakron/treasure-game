@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>จอโปรเจกเตอร์</title>
+  <title>เกมล่าขุมสมบัติ — จอหน้าห้อง (ครูควบคุมที่นี่)</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;800&display=swap">
   <link rel="stylesheet" href="assets/style.css">
@@ -17,14 +17,27 @@
     .dist { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; width: 100%; align-items: end; height: 120px; }
     .dist .bar { border-radius: 8px 8px 0 0; min-height: 6px; display: flex; align-items: flex-start; justify-content: center; font-size: 28px; font-weight: 800; padding-top: 4px; }
     .two { display: grid; grid-template-columns: 1.3fr 1fr; gap: 28px; width: 100%; align-items: start; }
+    .stage { padding-bottom: 96px; }
+    .ctrl { position: fixed; left: 12px; bottom: 12px; z-index: 9999; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; opacity: .45; transition: opacity .2s; }
+    .ctrl:hover, .ctrl:focus-within { opacity: 1; }
     @media (max-width: 900px) { .two { grid-template-columns: 1fr; } .stage { padding: 16px; } }
   </style>
 </head>
 <body>
 <div class="stage" id="stage"></div>
 
+<!-- แถบควบคุมของครู (จางๆ จนกว่าจะเอาเมาส์ไปชี้) · คีย์ลัด: → / PageDown / Space = ขั้นถัดไป -->
+<div class="ctrl" id="ctrl">
+  <button class="btn btn-green" id="nextBtn" type="button">▶ เริ่มเกม</button>
+  <button class="btn btn-ghost btn-sm" id="endBtn" type="button">⏭️ จบเกม</button>
+  <button class="btn btn-ghost btn-sm" id="newBtn" type="button">🔄 เกมใหม่</button>
+  <button class="btn btn-ghost btn-sm" id="fsBtn" type="button" aria-label="เต็มจอ">⛶</button>
+  <span class="pill" id="net">⏳ กำลังเชื่อมต่อ...</span>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="assets/app.js?v=4"></script>
+<script src="assets/engine.js"></script>
 <script>
   const stage = document.getElementById('stage');
   let D = null, lastKey = '', soundedWin = false, lastCount = -1;
@@ -116,31 +129,153 @@
     if (a) a.textContent = 'ตอบแล้ว ' + D.answered + '/' + D.playerCount;
   }, 100);
 
-  let peer = null, conn = null, retry = null;
-  const pin = new URLSearchParams(location.search).get('pin') || '';
-  function status(msg) { if (!D) stage.innerHTML = `<div class="screen"><h1>${esc(msg)}</h1></div>`; }
-  function connect() {
-    clearTimeout(retry); retry = null;
-    if (!pin) return status('เปิดจอนี้จากปุ่ม "เปิดจอโปรเจกเตอร์" ในหน้าครู');
-    status('กำลังเชื่อมต่อเกม ' + pin + '...');
-    if (peer && !peer.destroyed) { try { peer.destroy(); } catch (e) {} }
-    peer = new Peer();
-    const again = () => { if (!retry) retry = setTimeout(connect, 3000); };
-    peer.on('error', again);
-    peer.on('open', () => {
-      conn = peer.connect('thg-' + pin, { reliable: true });
-      conn.on('open', () => conn.send({ t: 'projector' }));
-      conn.on('data', m => {
-        if (m && m.t === 'state') {
-          D = m.s; syncClock(D.serverNow);
-          bgm.update(D.phase);   // เปลี่ยนเพลงตามช่วงของเกม (LOBBY / QUESTION / REVEAL / PUZZLE / PODIUM)
-          render(D);
-        }
-      });
-      conn.on('close', again); conn.on('error', again);
+  /* =====================================================================
+     หน้านี้เป็น "ตัวรันเกม" เอง (ย้ายมาจาก host.html)
+     ครูเปิดหน้านี้หน้าเดียว → ได้รหัสเกม → นักเรียนใส่รหัสที่โชว์บนจอ
+     ===================================================================== */
+  const $ = id => document.getElementById(id);
+  let peer = null, pushQueued = false;
+  const conns = new Map();            // conn -> { role, token }
+
+  function randomPin() { return String(Math.floor(Math.random() * 1000000)).padStart(6, '0'); }
+  function setNet(msg, color) { $('net').textContent = msg; $('net').style.color = color || ''; }
+
+  function openPeer(pin, resuming, tries) {
+    tries = tries || 0;
+    if (peer) { try { peer.destroy(); } catch (e) {} }
+    setNet('⏳ กำลังเชื่อมต่อ...');
+    peer = new Peer('thg-' + pin);
+    peer.on('open', () => setNet('🟢 พร้อมรับผู้เล่น', '#26890c'));
+    peer.on('connection', setupConn);
+    peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) {} });
+    peer.on('error', err => {
+      if (err.type === 'unavailable-id') {
+        if (resuming && tries < 8) return setTimeout(() => openPeer(pin, true, tries + 1), 3000); // รอให้ id เก่าหลุดจากเซิร์ฟเวอร์
+        const np = randomPin(); Engine.newGame(np); return openPeer(np, false);
+      }
+      setNet('🔴 เชื่อมต่อไม่ได้ (' + err.type + ') รีเฟรชหน้านี้', '#e21b3c');
     });
   }
-  connect();
+
+  function setupConn(conn) {
+    conns.set(conn, { role: null, token: null });
+    conn.on('data', m => onMsg(conn, m));
+    conn.on('close', () => conns.delete(conn));
+    conn.on('error', () => conns.delete(conn));
+  }
+  function send(conn, obj) { try { if (conn.open) conn.send(obj); } catch (e) {} }
+
+  function onMsg(conn, m) {
+    const info = conns.get(conn); if (!info || !m || typeof m !== 'object') return;
+    switch (m.t) {
+      case 'join': {
+        const r = Engine.join(m.team, m.nick);
+        if (!r.ok) return send(conn, { t: 'error', msg: r.msg });
+        info.role = 'player'; info.token = r.token;
+        send(conn, { t: 'joined', token: r.token, nickname: r.nickname, teamName: r.teamName });
+        return pushAll();
+      }
+      case 'rejoin': {
+        const s = Engine.playerState(String(m.token || ''));
+        if (!s) return send(conn, { t: 'gone', msg: 'ไม่พบผู้เล่น อาจมีการเริ่มเกมใหม่ กรุณาเข้าร่วมอีกครั้ง' });
+        info.role = 'player'; info.token = m.token;
+        return send(conn, { t: 'state', s });
+      }
+      case 'answer': {
+        if (info.role !== 'player') return;
+        const r = Engine.answer(info.token, String(m.choice || ''));
+        return send(conn, { t: 'answerResult', ...r });
+      }
+      case 'puzzle': {
+        if (info.role !== 'player') return;
+        const r = Engine.puzzle(info.token, String(m.answer || ''));
+        send(conn, { t: 'puzzleResult', ...r });
+        return pushAll();
+      }
+    }
+  }
+
+  function pushAll() {
+    conns.forEach((info, conn) => {
+      if (info.role !== 'player') return;
+      const s = Engine.playerState(info.token);
+      if (s) send(conn, { t: 'state', s });
+      else { send(conn, { t: 'gone', msg: 'คุณถูกนำออกจากเกม หรือเกมถูกเริ่มใหม่' }); info.role = null; }
+    });
+  }
+
+  // วาดจอ + ปุ่มควบคุมใหม่จากสถานะของเอนจิน
+  function refresh() {
+    if (!Engine.game()) return;
+    D = Engine.projectorState(); syncClock(D.serverNow);
+    bgm.update(D.phase);
+    render(D);
+    const t = Engine.teacherState();
+    $('nextBtn').textContent = nextLabel(t);
+    $('nextBtn').disabled = t.phase === 'PODIUM';
+  }
+  function nextLabel(t) {
+    switch (t.phase) {
+      case 'LOBBY': return '▶ เริ่มเกม';
+      case 'QUESTION': return '⏩ เฉลยเลย';
+      case 'REVEAL': return t.isLast ? (t.hasPuzzle ? '🧩 เปิดห้องสมบัติ' : '🏆 ไปโพเดียม') : '➡️ ข้อถัดไป';
+      case 'PUZZLE': return '🏆 ไปโพเดียม';
+      default: return 'เกมจบแล้ว';
+    }
+  }
+
+  // รวมการอัปเดตที่เกิดถี่ๆ (เช่น ทุกคนกดตอบพร้อมกัน) ให้ทำครั้งเดียว
+  Engine.onChange = () => {
+    if (pushQueued) return;
+    pushQueued = true;
+    setTimeout(() => { pushQueued = false; pushAll(); refresh(); }, 80);
+  };
+  setInterval(() => Engine.tick(), 500);
+  setInterval(pushAll, 5000);                                              // heartbeat ให้เวลาตรงกัน
+  setInterval(() => { try { localStorage.setItem('thg_live', Date.now()); } catch (e) {} }, 2000); // บอก host.html ว่าเกมกำลังรันอยู่
+
+  /* ---------- ปุ่มควบคุม ---------- */
+  let lastNext = 0;
+  function doNext() {
+    const n = Date.now(); if (n - lastNext < 600) return; lastNext = n;   // กันกดรัวข้ามหน้าเฉลย
+    const r = Engine.nextStep(); if (!r.ok) alert(r.msg);
+  }
+  $('nextBtn').onclick = doNext;
+  $('endBtn').onclick = () => { if (confirm('ข้ามไปหน้าจบเกมเลยใช่ไหม?')) Engine.endGame(); };
+  $('newBtn').onclick = () => {
+    if (!confirm('เริ่มเกมใหม่? ผู้เล่นและคะแนนทั้งหมดจะถูกล้าง และจะได้รหัสเกมใหม่')) return;
+    const pin = randomPin();
+    Engine.newGame(pin);
+    conns.forEach((info, conn) => { send(conn, { t: 'gone', msg: 'เกมถูกเริ่มใหม่ กรุณาเข้าร่วมอีกครั้ง' }); try { conn.close(); } catch (e) {} });
+    conns.clear(); soundedWin = false; lastKey = '';
+    openPeer(pin, false); refresh();
+  };
+  $('fsBtn').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); };
+  // คีย์ลัด: ลูกศรขวา / PageDown (รีโมทพรีเซนต์) / เว้นวรรค = ขั้นถัดไป
+  window.addEventListener('keydown', e => {
+    if (e.target.closest && e.target.closest('button, input, textarea')) return;
+    if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); doNext(); }
+  });
+
+  /* ---------- โหลดคำถามแล้วเริ่มเกม ---------- */
+  async function loadQuestions() {
+    try {
+      const res = await fetch('questions.json?t=' + Date.now(), { cache: 'no-store' });
+      if (!res.ok) return false;
+      const d = await res.json();
+      Engine.setContent(Array.isArray(d) ? d : d.questions, Array.isArray(d) ? null : d.settings);
+      return true;
+    } catch (e) { return false; }
+  }
+  (async () => {
+    Engine.loadContent();                         // ของที่เก็บไว้ในเครื่อง (สำรอง)
+    const saved = Engine.resume();
+    const midGame = saved && saved.phase !== 'LOBBY';
+    if (!midGame) await loadQuestions();          // ไม่ได้อยู่กลางเกม → ใช้ questions.json ล่าสุดจาก repo
+    if (saved) openPeer(saved.pin, true);
+    else { const pin = randomPin(); Engine.newGame(pin); openPeer(pin, false); }
+    refresh();
+  })();
 </script>
 </body>
 </html>
