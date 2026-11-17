@@ -29,6 +29,7 @@
 <!-- แถบควบคุมของครู (จางๆ จนกว่าจะเอาเมาส์ไปชี้) · คีย์ลัด: → / PageDown / Space = ขั้นถัดไป -->
 <div class="ctrl" id="ctrl">
   <button class="btn btn-green" id="nextBtn" type="button">▶ เริ่มเกม</button>
+  <button class="btn btn-ghost btn-sm" id="pinBtn" type="button">✏️ ตั้งรหัสเกม</button>
   <button class="btn btn-ghost btn-sm" id="endBtn" type="button">⏭️ จบเกม</button>
   <button class="btn btn-ghost btn-sm" id="newBtn" type="button">🔄 เกมใหม่</button>
   <button class="btn btn-ghost btn-sm" id="fsBtn" type="button" aria-label="เต็มจอ">⛶</button>
@@ -138,19 +139,28 @@
   const conns = new Map();            // conn -> { role, token }
 
   function randomPin() { return String(Math.floor(Math.random() * 1000000)).padStart(6, '0'); }
+  // รหัสที่ครูตั้งเอง (เก็บในเครื่อง) — ถ้ามี จะใช้รหัสนี้ทุกเกม ไม่สุ่มเปลี่ยนเอง
+  const validPin = v => /^\d{4,10}$/.test(v);
+  function prefPin() { try { const v = localStorage.getItem('thg_pin'); return validPin(v) ? v : ''; } catch (e) { return ''; } }
+  function startPin() { return prefPin() || randomPin(); }
+  let peerGen = 0;
   function setNet(msg, color) { $('net').textContent = msg; $('net').style.color = color || ''; }
 
   function openPeer(pin, resuming, tries) {
     tries = tries || 0;
+    const gen = ++peerGen;                       // กัน timer ของรหัสเก่าที่ค้างอยู่
     if (peer) { try { peer.destroy(); } catch (e) {} }
     setNet('⏳ กำลังเชื่อมต่อ...');
     peer = new Peer('thg-' + pin);
-    peer.on('open', () => setNet('🟢 พร้อมรับผู้เล่น', '#26890c'));
-    peer.on('connection', setupConn);
-    peer.on('disconnected', () => { try { peer.reconnect(); } catch (e) {} });
+    peer.on('open', () => { if (gen === peerGen) setNet('🟢 พร้อมรับผู้เล่น', '#26890c'); });
+    peer.on('connection', c => { if (gen === peerGen) setupConn(c); });
+    peer.on('disconnected', () => { if (gen === peerGen) try { peer.reconnect(); } catch (e) {} });
     peer.on('error', err => {
+      if (gen !== peerGen) return;
       if (err.type === 'unavailable-id') {
-        if (resuming && tries < 8) return setTimeout(() => openPeer(pin, true, tries + 1), 3000); // รอให้ id เก่าหลุดจากเซิร์ฟเวอร์
+        const keep = resuming || prefPin() === pin;   // รหัสที่ต้องการคงไว้ → ไม่เปลี่ยนเอง
+        if (keep && tries < 20) { setNet('⏳ รหัสนี้ยังไม่ว่าง กำลังลองใหม่...'); return setTimeout(() => { if (gen === peerGen) openPeer(pin, resuming, tries + 1); }, 3000); }
+        if (keep) return setNet('🔴 รหัส ' + pin + ' ถูกใช้อยู่ที่อื่น กด ✏️ ตั้งรหัสเกมใหม่', '#e21b3c');
         const np = randomPin(); Engine.newGame(np); return openPeer(np, false);
       }
       setNet('🔴 เชื่อมต่อไม่ได้ (' + err.type + ') รีเฟรชหน้านี้', '#e21b3c');
@@ -213,6 +223,7 @@
     const t = Engine.teacherState();
     $('nextBtn').textContent = nextLabel(t);
     $('nextBtn').disabled = t.phase === 'PODIUM';
+    $('pinBtn').hidden = t.phase !== 'LOBBY';
   }
   function nextLabel(t) {
     switch (t.phase) {
@@ -242,13 +253,26 @@
   }
   $('nextBtn').onclick = doNext;
   $('endBtn').onclick = () => { if (confirm('ข้ามไปหน้าจบเกมเลยใช่ไหม?')) Engine.endGame(); };
-  $('newBtn').onclick = () => {
-    if (!confirm('เริ่มเกมใหม่? ผู้เล่นและคะแนนทั้งหมดจะถูกล้าง และจะได้รหัสเกมใหม่')) return;
-    const pin = randomPin();
+  function resetGame(pin) {
     Engine.newGame(pin);
     conns.forEach((info, conn) => { send(conn, { t: 'gone', msg: 'เกมถูกเริ่มใหม่ กรุณาเข้าร่วมอีกครั้ง' }); try { conn.close(); } catch (e) {} });
     conns.clear(); soundedWin = false; lastKey = '';
     openPeer(pin, false); refresh();
+  }
+  $('newBtn').onclick = () => {
+    const keepMsg = prefPin() ? ' (ใช้รหัสเดิมที่ตั้งไว้ ' + prefPin() + ')' : ' และจะได้รหัสเกมใหม่';
+    if (!confirm('เริ่มเกมใหม่? ผู้เล่นและคะแนนทั้งหมดจะถูกล้าง' + keepMsg)) return;
+    resetGame(startPin());
+  };
+  // ตั้งรหัสเกมเอง (ทำได้เฉพาะก่อนเริ่มเกม)
+  $('pinBtn').onclick = () => {
+    const g = Engine.game(); if (!g || g.phase !== 'LOBBY') return;
+    const v = (prompt('ตั้งรหัสเกม (ตัวเลข 4-10 หลัก)\nรหัสนี้จะถูกจำไว้ ไม่เปลี่ยนเองทุกครั้งที่เปิดเกม', g.pin) || '').trim();
+    if (!v || v === g.pin) return;
+    if (!validPin(v)) return alert('รหัสต้องเป็นตัวเลข 4-10 หลักเท่านั้น');
+    if (g.players.length && !confirm('มีผู้เล่นเข้าร่วมแล้ว ' + g.players.length + ' คน การเปลี่ยนรหัสจะให้ทุกคนต้องเข้าใหม่ ต้องการเปลี่ยนไหม?')) return;
+    try { localStorage.setItem('thg_pin', v); } catch (e) {}
+    resetGame(v);
   };
   $('fsBtn').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen().catch(() => {}); };
   // คีย์ลัด: ลูกศรขวา / PageDown (รีโมทพรีเซนต์) / เว้นวรรค = ขั้นถัดไป
@@ -273,7 +297,7 @@
     const midGame = saved && saved.phase !== 'LOBBY';
     if (!midGame) await loadQuestions();          // ไม่ได้อยู่กลางเกม → ใช้ questions.json ล่าสุดจาก repo
     if (saved) openPeer(saved.pin, true);
-    else { const pin = randomPin(); Engine.newGame(pin); openPeer(pin, false); }
+    else { const pin = startPin(); Engine.newGame(pin); openPeer(pin, false); }
     refresh();
   })();
 </script>
