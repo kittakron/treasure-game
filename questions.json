@@ -15,7 +15,7 @@
       "choice_d": "16 วิธี",
       "correct": "c",
       "points": 1000,
-      "time": 90,
+      "time": 20,
       "letter": "W",
       "explanation": ""
     },
@@ -28,7 +28,7 @@
       "choice_d": "25 วิธี",
       "correct": "c",
       "points": 1000,
-      "time": 90,
+      "time": 20,
       "letter": "O",
       "explanation": ""
     },
@@ -41,7 +41,7 @@
       "choice_d": "30 วิธี",
       "correct": "c",
       "points": 1000,
-      "time": 90,
+      "time": 20,
       "letter": "N",
       "explanation": ""
     },
@@ -54,7 +54,7 @@
       "choice_d": "36 วิธี",
       "correct": "b",
       "points": 1000,
-      "time": 90,
+      "time": 20,
       "letter": "N",
       "explanation": ""
     },
@@ -67,7 +67,7 @@
       "choice_d": "25 วิธี",
       "correct": "a",
       "points": 1000,
-      "time": 90,
+      "time": 20,
       "letter": "A",
       "explanation": ""
     },
@@ -80,7 +80,7 @@
       "choice_d": "20 วิธี",
       "correct": "d",
       "points": 1000,
-      "time": 90,
+      "time": 20,
       "letter": "D",
       "explanation": ""
     },
@@ -93,7 +93,7 @@
       "choice_d": "25 วิธี",
       "correct": "b",
       "points": 1000,
-      "time": 90,
+      "time": 20,
       "letter": "I",
       "explanation": ""
     },
@@ -106,7 +106,7 @@
       "choice_d": "18 วิธี",
       "correct": "c",
       "points": 1000,
-      "time": 90,
+      "time": 20,
       "letter": "S",
       "explanation": ""
     },
@@ -119,7 +119,7 @@
       "choice_d": "24 วิธี",
       "correct": "a",
       "points": 1000,
-      "time": 90,
+      "time": 20,
       "letter": "M",
       "explanation": ""
     },
@@ -132,7 +132,7 @@
       "choice_d": "72 วิธี",
       "correct": "d",
       "points": 1500,
-      "time": 120,
+      "time": 20,
       "letter": "",
       "explanation": "9×4×2=729 \\times 4 \\times 2 = 729×4×2=72"
     }
