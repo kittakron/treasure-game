@@ -1,12 +1,30 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
+<script>
+/* อัปเดตอัตโนมัติ: ถ้ามีเวอร์ชันใหม่บนเซิร์ฟเวอร์ จะโหลดหน้านี้ใหม่เองหนึ่งครั้ง (ไม่ต้องล้างแคช) */
+(function () {
+  var BUILD = '__BUILD__'; window.BUILD = BUILD;
+  if (BUILD.charAt(0) === '_') return;            // รันในเครื่อง/ไม่ผ่าน workflow → ข้าม
+  fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || !d.v || d.v === BUILD) return;
+      var seen = null; try { seen = sessionStorage.getItem('thg_reload'); } catch (e) {}
+      if (seen === d.v) return;                   // กันรีโหลดวนซ้ำ
+      try { sessionStorage.setItem('thg_reload', d.v); } catch (e) {}
+      var u = new URL(location.href); u.searchParams.set('_v', d.v); location.replace(u.toString());
+    })
+    .catch(function () {});
+})();
+</script>
+
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>เกมล่าขุมสมบัติ — จอหน้าห้อง (ครูควบคุมที่นี่)</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;800&display=swap">
-  <link rel="stylesheet" href="assets/style.css">
+  <link rel="stylesheet" href="assets/style.css?v=__BUILD__">
   <style>
     body { overflow-x: hidden; }
     .stage { min-height: 100vh; padding: 28px 40px; display: flex; flex-direction: column; gap: 18px; align-items: center; }
@@ -37,8 +55,8 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="assets/app.js?v=4"></script>
-<script src="assets/engine.js"></script>
+<script src="assets/app.js?v=__BUILD__"></script>
+<script src="assets/engine.js?v=__BUILD__"></script>
 <script>
   const stage = document.getElementById('stage');
   let D = null, lastKey = '', soundedWin = false, lastCount = -1;
@@ -143,12 +161,12 @@
   const validPin = v => /^\d{4,10}$/.test(v);
   function prefPin() { try { const v = localStorage.getItem('thg_pin'); return validPin(v) ? v : ''; } catch (e) { return ''; } }
   function startPin() { return prefPin() || randomPin(); }
-  let peerGen = 0;
+  let peerGen = 0, peerPin = '';
   function setNet(msg, color) { $('net').textContent = msg; $('net').style.color = color || ''; }
 
   function openPeer(pin, resuming, tries) {
     tries = tries || 0;
-    const gen = ++peerGen;                       // กัน timer ของรหัสเก่าที่ค้างอยู่
+    const gen = ++peerGen; peerPin = pin;        // กัน timer ของรหัสเก่าที่ค้างอยู่
     if (peer) { try { peer.destroy(); } catch (e) {} }
     setNet('⏳ กำลังเชื่อมต่อ...');
     peer = new Peer('thg-' + pin);
@@ -182,19 +200,31 @@
         const r = Engine.join(m.team, m.nick);
         if (!r.ok) return send(conn, { t: 'error', msg: r.msg });
         info.role = 'player'; info.token = r.token;
-        send(conn, { t: 'joined', token: r.token, nickname: r.nickname, teamName: r.teamName });
+        send(conn, { t: 'joined', token: r.token, nickname: r.nickname, teamName: r.teamName, gid: Engine.game().gid });
         return pushAll();
       }
       case 'rejoin': {
-        const s = Engine.playerState(String(m.token || ''));
+        const g = Engine.game();
+        const s = (m.gid && g.gid && m.gid !== g.gid) ? null : Engine.playerState(String(m.token || ''));   // คนละเกม (ครูเริ่มใหม่) = ต้องเข้าใหม่
         if (!s) return send(conn, { t: 'gone', msg: 'ไม่พบผู้เล่น อาจมีการเริ่มเกมใหม่ กรุณาเข้าร่วมอีกครั้ง' });
         info.role = 'player'; info.token = m.token;
         return send(conn, { t: 'state', s });
+      }
+      case 'leave': {                              // นักเรียนกดออกจากเกม (ลบชื่อออกเฉพาะตอนยังอยู่หน้ารอ)
+        const g = Engine.game(), p = g && g.players.find(x => x.token === info.token);
+        info.role = null; info.token = null;
+        if (p && g.phase === 'LOBBY') Engine.kick(p.id);
+        return;
       }
       case 'answer': {
         if (info.role !== 'player') return;
         const r = Engine.answer(info.token, String(m.choice || ''));
         return send(conn, { t: 'answerResult', ...r });
+      }
+      case 'hint': {
+        if (info.role !== 'player') return;
+        Engine.hint(info.token);
+        return pushAll();
       }
       case 'puzzle': {
         if (info.role !== 'player') return;
@@ -255,9 +285,16 @@
   $('endBtn').onclick = () => { if (confirm('ข้ามไปหน้าจบเกมเลยใช่ไหม?')) Engine.endGame(); };
   function resetGame(pin) {
     Engine.newGame(pin);
-    conns.forEach((info, conn) => { send(conn, { t: 'gone', msg: 'เกมถูกเริ่มใหม่ กรุณาเข้าร่วมอีกครั้ง' }); try { conn.close(); } catch (e) {} });
-    conns.clear(); soundedWin = false; lastKey = '';
-    openPeer(pin, false); refresh();
+    // แจ้งทุกเครื่องให้ล้างข้อมูลเดิมแล้วกลับไปหน้าใส่รหัสเกม
+    conns.forEach((info, conn) => {
+      send(conn, { t: 'gone', msg: 'ครูเริ่มเกมใหม่แล้ว กรุณาใส่รหัสเกมเพื่อเข้าร่วมอีกครั้ง' });
+      info.role = null; info.token = null;
+      setTimeout(() => { try { conn.close(); } catch (e) {} }, 1500);
+    });
+    soundedWin = false; lastKey = '';
+    // รหัสเดิม = ใช้การเชื่อมต่อเดิมต่อเลย (ไม่ต้องปิด/เปิดใหม่ ไม่งั้นนักเรียนจะหลุดค้าง) · รหัสเปลี่ยนค่อยเปิดใหม่หลังแจ้งนักเรียนแล้ว
+    if (pin !== peerPin) { peerPin = pin; setTimeout(() => openPeer(pin, false), 800); }
+    refresh();
   }
   $('newBtn').onclick = () => {
     const keepMsg = prefPin() ? ' (ใช้รหัสเดิมที่ตั้งไว้ ' + prefPin() + ')' : ' และจะได้รหัสเกมใหม่';

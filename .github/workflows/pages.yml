@@ -16,15 +16,27 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # ใส่เลขเวอร์ชันของการ deploy ครั้งนี้ลงในไฟล์ทุกไฟล์ (แทน __BUILD__) + สร้าง version.json
+      # ทำให้เบราว์เซอร์โหลดไฟล์ใหม่เองทุกครั้งที่อัปเดต ไม่ต้องล้างแคช
+      - name: Stamp build version
+        run: |
+          V="$(date -u +%Y%m%d%H%M%S)-${GITHUB_SHA::7}"
+          grep -rlI "__BUILD__" --include='*.html' --include='*.js' --include='*.css' . | xargs -r sed -i "s/__BUILD__/${V}/g"
+          echo "{\"v\":\"${V}\"}" > version.json
+          echo "Build version: ${V}"
+
       - uses: actions/configure-pages@v5
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .
+
       - id: deployment
         uses: actions/deploy-pages@v4

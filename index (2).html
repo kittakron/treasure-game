@@ -1,12 +1,30 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
+<script>
+/* อัปเดตอัตโนมัติ: ถ้ามีเวอร์ชันใหม่บนเซิร์ฟเวอร์ จะโหลดหน้านี้ใหม่เองหนึ่งครั้ง (ไม่ต้องล้างแคช) */
+(function () {
+  var BUILD = '__BUILD__'; window.BUILD = BUILD;
+  if (BUILD.charAt(0) === '_') return;            // รันในเครื่อง/ไม่ผ่าน workflow → ข้าม
+  fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || !d.v || d.v === BUILD) return;
+      var seen = null; try { seen = sessionStorage.getItem('thg_reload'); } catch (e) {}
+      if (seen === d.v) return;                   // กันรีโหลดวนซ้ำ
+      try { sessionStorage.setItem('thg_reload', d.v); } catch (e) {}
+      var u = new URL(location.href); u.searchParams.set('_v', d.v); location.replace(u.toString());
+    })
+    .catch(function () {});
+})();
+</script>
+
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>เข้าร่วมเกม</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;800&display=swap">
-  <link rel="stylesheet" href="assets/style.css">
+  <link rel="stylesheet" href="assets/style.css?v=__BUILD__">
 </head>
 <body>
 
@@ -31,11 +49,12 @@
 
 <!-- ============ GAME ============ -->
 <div id="gameView" hidden>
-  <div id="connBanner" class="card center" style="background:#fff7d6;border-radius:0;" hidden>📡 กำลังเชื่อมต่อใหม่...</div>
+  <div id="connBanner" class="card center" style="background:#fff7d6;border-radius:0;" hidden>📡 กำลังเชื่อมต่อใหม่... <button class="btn btn-ghost btn-sm" id="exitBtn2" type="button">🚪 ออกจากเกม</button></div>
   <div class="topbar">
     <span class="nm" id="nickLabel"></span>
     <span id="letters"></span>
     <span class="pill" id="scoreLabel">0</span>
+    <button class="btn btn-ghost btn-sm" id="exitBtn" type="button">🚪 ออก</button>
   </div>
 
   <main class="wrap" style="max-width:640px;">
@@ -81,6 +100,7 @@
         <p>ช่วยกันเอารหัสลับของทีมมาเรียงเป็นคำตอบ (ใครในทีมตอบถูก ทีมได้คะแนน)</p>
         <p class="muted">คำใบ้: <span id="puzzleHint"></span></p>
         <div id="puzzleLetters"></div>
+        <button class="btn btn-primary btn-block" id="hintBtn" hidden>💡 ขอคำใบ้ (เปิดตัวอักษรที่ขาด)</button>
         <input id="puzzleInput" placeholder="พิมพ์คำตอบ" autocomplete="off">
         <button class="btn btn-dark btn-block" id="puzzleBtn">🔓 ไขปริศนา</button>
         <p id="puzzleMsg" style="font-weight:600;margin:0;" role="status"></p>
@@ -92,20 +112,21 @@
       <h1 id="podiumTitle"></h1>
       <div class="row" style="justify-content:center;" id="podiumStats"></div>
       <div id="podiumLetters"></div>
+      <button class="btn btn-primary btn-lg" id="exitBtn3" type="button">🔄 ออก / เข้าเล่นเกมใหม่</button>
     </section>
 
   </main>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="assets/app.js"></script>
+<script src="assets/app.js?v=__BUILD__"></script>
 <script>
   const $ = id => document.getElementById(id);
   const ID = 'thg_player';           // เก็บ { pin, token } ไว้เข้าเกมต่ออัตโนมัติ
   let saved = null; try { saved = JSON.parse(localStorage.getItem(ID)); } catch (e) {}
   let peer = null, conn = null, pin = '', token = '';
   let S = null, renderedQid = null, soundedQid = null, sending = false, podiumShown = false;
-  let pendingJoin = null, retryTimer = null, leaving = false;
+  let pendingJoin = null, retryTimer = null, leaving = false, gid = '';
 
   /* ---------- เครือข่าย ---------- */
   function ensurePeer(cb) {
@@ -139,20 +160,21 @@
   function scheduleReconnect() {
     if (leaving || !token || retryTimer) return;
     $('connBanner').hidden = false;
-    retryTimer = setTimeout(() => { retryTimer = null; connect(() => conn.send({ t: 'rejoin', token })); }, 2000);
+    retryTimer = setTimeout(() => { retryTimer = null; connect(() => conn.send({ t: 'rejoin', token, gid })); }, 2000);
   }
 
   function onMsg(m) {
     if (!m) return;
     if (m.t === 'joined') {
-      pendingJoin = null; token = m.token;
-      localStorage.setItem(ID, JSON.stringify({ pin, token }));
+      pendingJoin = null; token = m.token; gid = m.gid || '';
+      localStorage.setItem(ID, JSON.stringify({ pin, token, gid }));
       sfx.tap(); showGame();
     } else if (m.t === 'error') {
       joinFail(m.msg);
     } else if (m.t === 'gone') {
       leaveToJoin(m.msg);
     } else if (m.t === 'state') {
+      if (!token) return;                    // ออกจากเกมไปแล้ว ไม่ต้องรับสถานะค้าง
       S = m.s; syncClock(S.serverNow); showGame(); render(S);
     } else if (m.t === 'answerResult') {
       sending = false;
@@ -191,12 +213,24 @@
 
   function leaveToJoin(msg) {
     leaving = true; clearTimeout(retryTimer); retryTimer = null;
-    localStorage.removeItem(ID); token = ''; renderedQid = null; podiumShown = false; S = null;
+    try { localStorage.removeItem(ID); } catch (e) {}
+    token = ''; gid = ''; pin = ''; renderedQid = null; soundedQid = null; podiumShown = false; sending = false; S = null; pendingJoin = null;
+    $('pinInput').value = '';                       // ต้องกรอกรหัสเกมใหม่ทุกครั้ง
     try { conn && conn.close(); } catch (e) {}
     $('gameView').hidden = true; $('joinView').hidden = false;
     $('nickStep').hidden = true; $('pinStep').hidden = false; $('nickBtn').disabled = false;
     $('joinError').textContent = msg || ''; leaving = false;
+    $('pinBtn').disabled = false; $('pinInput').focus();
   }
+  // ออกจากเกมเอง (ล้างข้อมูลที่จำไว้ แล้วกลับไปหน้าใส่รหัส)
+  function exitGame(ask) {
+    if (ask && !confirm('ออกจากเกมนี้ใช่ไหม? ต้องใส่รหัสเกมเพื่อเข้าใหม่')) return;
+    try { if (conn && conn.open) conn.send({ t: 'leave' }); } catch (e) {}
+    leaveToJoin('ออกจากเกมแล้ว ใส่รหัสเกมเพื่อเข้าใหม่');
+  }
+  $('exitBtn').onclick = () => exitGame(true);
+  $('exitBtn2').onclick = () => exitGame(false);
+  $('exitBtn3').onclick = () => exitGame(false);
   function showGame() { $('joinView').hidden = true; $('gameView').hidden = false; $('connBanner').hidden = true; }
 
   /* ---------- Render ---------- */
@@ -274,6 +308,9 @@
       box.className = 'result none';
       html = `<div class="big">⏰ หมดเวลา</div><div>คำตอบที่ถูกคือ ${CHOICE[q.correct].label}. ${esc(q.choices[q.correct])}</div>`;
     }
+    if (s.catchUp) html += s.catchMissing > 0
+      ? `<div style="margin-top:12px;">🔒 ทีมยังขาดรหัสลับอีก ${s.catchMissing} ตัว ไปกด “ขอคำใบ้” ในห้องสมบัติได้</div>`
+      : `<div style="margin-top:12px;">🎁 ตอบข้อนี้ถูก ได้รหัสลับที่ขาดครบแล้ว <span>${lettersHtml(s.letters)}</span></div>`;
     box.innerHTML = html;
     $('resultStats').innerHTML =
       `<span class="stat">🏅 ทีมอันดับ ${s.rank}</span><span class="stat">คุณทำได้ ${s.player.score.toLocaleString()}</span>` +
@@ -285,11 +322,14 @@
   function renderPuzzle(s) {
     $('puzzleHint').textContent = s.puzzle.hint || '-';
     $('puzzleLetters').innerHTML = s.letters.length ? lettersHtml(s.letters) : '<span class="muted">ทีมยังไม่มีรหัสลับ</span>';
+    $('hintBtn').hidden = !(s.puzzle.missing > 0 && !s.puzzle.hinted && !s.puzzle.solved);
+    $('hintBtn').textContent = '💡 ขอคำใบ้ (ทีมยังขาดรหัส ' + s.puzzle.missing + ' ตัว)';
     if (s.puzzle.solved) {
       $('puzzleMsg').textContent = '🎉 ทีมของคุณไขสำเร็จแล้ว! รอครูไปขั้นถัดไป'; $('puzzleMsg').style.color = 'var(--ok)';
       $('puzzleBtn').disabled = true; $('puzzleInput').disabled = true;
     }
   }
+  $('hintBtn').onclick = () => { if (conn && conn.open) conn.send({ t: 'hint' }); };
   $('puzzleBtn').onclick = () => { if (conn && conn.open) conn.send({ t: 'puzzle', answer: $('puzzleInput').value }); };
   $('puzzleInput').onkeydown = e => { if (e.key === 'Enter') $('puzzleBtn').click(); };
 
@@ -308,9 +348,9 @@
   const qp = new URLSearchParams(location.search).get('pin');
   if (qp) $('pinInput').value = qp.replace(/\D/g, '');
   if (saved && saved.token && saved.pin) {          // กลับเข้าเกมเดิมอัตโนมัติ
-    pin = saved.pin; token = saved.token; showGame();
+    pin = saved.pin; token = saved.token; gid = saved.gid || ''; showGame();
     $('connBanner').hidden = false;
-    connect(() => conn.send({ t: 'rejoin', token }));
+    connect(() => conn.send({ t: 'rejoin', token, gid }));
   }
 </script>
 </body>
