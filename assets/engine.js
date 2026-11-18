@@ -99,7 +99,7 @@ const Engine = (() => {
   };
 
   /* ---------- game lifecycle ---------- */
-  const blank = pin => ({ pin, phase: 'LOBBY', qid: 0, startMs: 0, endMs: 0, nextPid: 1, nextTid: 1, teams: [], players: [], answers: {}, solves: [] });
+  const blank = pin => ({ pin, phase: 'LOBBY', qid: 0, startMs: 0, endMs: 0, nextPid: 1, nextTid: 1, teams: [], players: [], answers: {}, solves: [], hints: [] });
   E.newGame = pin => { G = blank(pin); changed(); return G; };
   E.resume = () => {
     try { const g = JSON.parse(localStorage.getItem(KEY_GAME)); if (g && g.pin) { G = g; return G; } } catch (e) {}
@@ -122,16 +122,27 @@ const Engine = (() => {
   const hasPuzzle = () => !!CFG.puzzleAnswer.trim();
   const solved = teamId => G.solves.some(s => s.teamId === teamId);
 
+  // ข้อที่ตั้ง letter = '*' คือ "ข้อเติมรหัสให้ครบ": พอเฉลยข้อนั้นแล้ว ทุกทีมจะได้ตัวอักษรที่ยังขาดครบทุกตัว (ไม่ว่าจะตอบถูกหรือผิด)
+  const CATCH = '*';
+  function catchUpDone(q) {                       // เล่นถึงข้อนั้นและเฉลยแล้วหรือยัง (ถ้าจบเกมก่อนถึงข้อนั้น = ยังไม่ได้)
+    const qi = Q.findIndex(x => x.id === q.id), ci = Q.findIndex(x => x.id === G.qid);
+    if (ci < 0 || qi < 0) return false;
+    return ci > qi || (ci === qi && G.phase !== 'QUESTION' && G.phase !== 'LOBBY');
+  }
+  const teamHit = (teamId, q) => { const ans = answersFor(q.id); return G.players.some(p => p.teamId === teamId && ans[p.token] && ans[p.token].correct); };
+  const hinted = teamId => (G.hints || []).includes(teamId);
   function teamLetters(teamId, excludeQid) {
     const out = [];
+    // ได้ตัวที่ขาดครบ เมื่อ (1) ทีมตอบ "ข้อเติมรหัส" ถูก หรือ (2) ทีมกดขอคำใบ้เองในห้องสมบัติ
+    const caught = Q.some(q => q.letter === CATCH && q.id !== excludeQid && catchUpDone(q) && teamHit(teamId, q));
+    const full = caught || hinted(teamId);
     Q.forEach(q => {
-      if (q.id === excludeQid || !q.letter) return;
-      const ans = answersFor(q.id);
-      const hit = G.players.some(p => p.teamId === teamId && ans[p.token] && ans[p.token].correct);
-      if (hit) out.push(q.letter);
+      if (q.id === excludeQid || !q.letter || q.letter === CATCH) return;
+      if (teamHit(teamId, q) || full) out.push(q.letter);
     });
     return out;
   }
+  const totalLetters = () => Q.filter(q => q.letter && q.letter !== CATCH).length;
 
   function board(limit, withLetters) {
     const rows = G.teams.map(t => {
@@ -224,9 +235,19 @@ const Engine = (() => {
       const ratio = Math.min(1, (t - G.startMs) / Math.max(1000, q.time * 1000));
       points = Math.round(q.points * (1 - ratio / 2)) + Math.min(p.streak, 5) * 100; // เร็ว=เต็ม ช้าสุด=ครึ่ง + โบนัสสตรีค
     }
-    G.answers[q.id][token] = { choice, correct, points, letter: correct ? q.letter : '' };
+    G.answers[q.id][token] = { choice, correct, points, letter: correct && q.letter !== CATCH ? q.letter : '' };
     p.score += points; p.streak = correct ? p.streak + 1 : 0; p.best = Math.max(p.best, p.streak); if (correct) p.correct++;
     changed(); return { ok: true };
+  };
+
+  // ทีมที่ยังได้รหัสไม่ครบ กดขอคำใบ้เองในห้องสมบัติ → ได้ตัวอักษรที่ขาดทั้งหมด
+  E.hint = token => {
+    const p = playerByToken(token);
+    if (!p) return { ok: false, msg: 'ไม่พบผู้เล่น' };
+    if (G.phase !== 'PUZZLE') return { ok: false, msg: 'ขอคำใบ้ได้เฉพาะตอนห้องสมบัติ' };
+    G.hints = G.hints || [];
+    if (!hinted(p.teamId)) { G.hints.push(p.teamId); changed(); }
+    return { ok: true };
   };
 
   E.puzzle = (token, answer) => {
@@ -256,8 +277,9 @@ const Engine = (() => {
       out.question = pub(q, reveal); out.startMs = G.startMs; out.endMs = G.endMs; out.qIndex = ps.index; out.qTotal = ps.total;
       out.myAnswer = a ? (reveal ? { choice: a.choice, correct: a.correct, points: a.points, letter: a.letter } : { choice: a.choice }) : null;
       if (reveal) out.rank = row.rank;
+      if (reveal && q.letter === CATCH) { out.catchUp = true; out.catchMissing = totalLetters() - out.letters.length; }
     }
-    if (G.phase === 'PUZZLE') out.puzzle = { hint: CFG.puzzleHint, solved: solved(t.id), bonus: CFG.puzzleBonus };
+    if (G.phase === 'PUZZLE') out.puzzle = { hint: CFG.puzzleHint, solved: solved(t.id), bonus: CFG.puzzleBonus, missing: totalLetters() - out.letters.length, hinted: hinted(t.id) };
     if (G.phase === 'PODIUM') { out.rank = row.rank; out.top = board(3); }
     return out;
   };

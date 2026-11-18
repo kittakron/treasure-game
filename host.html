@@ -138,7 +138,7 @@
     <div class="form2">
       <div><label for="f_time">เวลาตอบ (วินาที)</label><input id="f_time" type="number" min="5" max="300" value="20"></div>
       <div><label for="f_points">คะแนนเต็ม (0 = ไม่มีคะแนน)</label><input id="f_points" type="number" min="0" max="10000" step="100" value="1000"></div>
-      <div><label for="f_letter">ตัวอักษรรหัสลับ (ไม่บังคับ)</label><input id="f_letter" maxlength="10"></div>
+      <div><label for="f_letter">ตัวอักษรรหัสลับ (ไม่บังคับ · ใส่ * = ข้อเติมรหัส: ทีมที่ตอบถูกได้ตัวที่ขาดครบ ทีมอื่นต้องขอคำใบ้เองตอนห้องสมบัติ)</label><input id="f_letter" maxlength="10"></div>
       <div><label for="f_expl">คำอธิบายเฉลย (ไม่บังคับ)</label><input id="f_expl" maxlength="1000"></div>
     </div>
     <p id="f_error" style="color:#c0392b;min-height:1.4em;" role="alert"></p>
@@ -283,7 +283,7 @@
       qp.hidden = false; const q = t.question;
       $('qPanelText').textContent = q.question;
       $('qPanelAnswered').textContent = 'ตอบแล้ว ' + t.answered + '/' + t.playerCount;
-      $('qPanelLetter').textContent = q.letter ? 'รหัสลับข้อนี้: ' + q.letter : 'ไม่มีรหัสลับ';
+      $('qPanelLetter').textContent = q.letter === '*' ? 'ข้อเติมรหัส (ทีมที่ตอบถูกได้ตัวที่ขาดครบ)' : q.letter ? 'รหัสลับข้อนี้: ' + q.letter : 'ไม่มีรหัสลับ';
       $('qPanelChoices').innerHTML = Object.keys(q.choices).map(k => {
         const right = k === q.correct;
         return `<div class="tile ${CHOICE[k].cls} ${right ? 'right' : 'dim'}" style="min-height:0;padding:10px 14px;font-size:16px;">
@@ -338,7 +338,7 @@
           <b>${esc(q.question)}</b>
           <div class="opts">${['a', 'b', 'c', 'd'].filter(k => q['choice_' + k]).map(k =>
             `<span class="${k === q.correct ? 'ok' : ''}">${CHOICE[k].shape} ${esc(q['choice_' + k])}${k === q.correct ? ' ✓' : ''}</span>`).join('')}</div>
-          <div class="muted" style="font-size:13px;margin-top:4px;">⏱ ${q.time} วิ · ${q.points} คะแนน${q.letter ? ' · รหัสลับ ' + esc(q.letter) : ''}</div>
+          <div class="muted" style="font-size:13px;margin-top:4px;">⏱ ${q.time} วิ · ${q.points} คะแนน${q.letter === '*' ? ' · เติมรหัสให้ครบ' : q.letter ? ' · รหัสลับ ' + esc(q.letter) : ''}</div>
         </div>
         <div class="acts">
           <button class="btn btn-ghost btn-sm" data-move="up" data-id="${q.id}" aria-label="เลื่อนขึ้น">▲</button>
@@ -347,7 +347,7 @@
           <button class="btn btn-danger btn-sm" data-del="${q.id}">ลบ</button>
         </div>
       </div>`).join('') : '<p class="muted">ยังไม่มีคำถาม กด "เพิ่มคำถาม" ได้เลย</p>';
-    const l = questions.map(q => q.letter).filter(Boolean).join('');
+    const l = questions.map(q => q.letter).filter(l => l && l !== '*').join('');
     $('lettersHelp').textContent = l ? '(รหัสลับเรียงตามข้อ: ' + l + ')' : '';
   }
   $('qList').onclick = e => {
