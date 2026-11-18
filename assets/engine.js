@@ -99,7 +99,7 @@ const Engine = (() => {
   };
 
   /* ---------- game lifecycle ---------- */
-  const blank = pin => ({ pin, phase: 'LOBBY', qid: 0, startMs: 0, endMs: 0, nextPid: 1, nextTid: 1, teams: [], players: [], answers: {}, solves: [], hints: [] });
+  const blank = pin => ({ pin, gid: Math.random().toString(36).slice(2, 10), phase: 'LOBBY', qid: 0, startMs: 0, endMs: 0, nextPid: 1, nextTid: 1, teams: [], players: [], answers: {}, solves: [], hints: [] });
   E.newGame = pin => { G = blank(pin); changed(); return G; };
   E.resume = () => {
     try { const g = JSON.parse(localStorage.getItem(KEY_GAME)); if (g && g.pin) { G = g; return G; } } catch (e) {}
