@@ -1,12 +1,30 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
+<script>
+/* อัปเดตอัตโนมัติ: ถ้ามีเวอร์ชันใหม่บนเซิร์ฟเวอร์ จะโหลดหน้านี้ใหม่เองหนึ่งครั้ง (ไม่ต้องล้างแคช) */
+(function () {
+  var BUILD = '__BUILD__'; window.BUILD = BUILD;
+  if (BUILD.charAt(0) === '_') return;            // รันในเครื่อง/ไม่ผ่าน workflow → ข้าม
+  fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || !d.v || d.v === BUILD) return;
+      var seen = null; try { seen = sessionStorage.getItem('thg_reload'); } catch (e) {}
+      if (seen === d.v) return;                   // กันรีโหลดวนซ้ำ
+      try { sessionStorage.setItem('thg_reload', d.v); } catch (e) {}
+      var u = new URL(location.href); u.searchParams.set('_v', d.v); location.replace(u.toString());
+    })
+    .catch(function () {});
+})();
+</script>
+
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ครูผู้ควบคุมเกม</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;800&display=swap">
-  <link rel="stylesheet" href="assets/style.css">
+  <link rel="stylesheet" href="assets/style.css?v=__BUILD__">
 </head>
 <body>
 <!-- ============ DASHBOARD ============ -->
@@ -151,8 +169,8 @@
 
 
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
-<script src="assets/app.js"></script>
-<script src="assets/engine.js"></script>
+<script src="assets/app.js?v=__BUILD__"></script>
+<script src="assets/engine.js?v=__BUILD__"></script>
 <script>
   const $ = id => document.getElementById(id);
   const PHASE_TH = { LOBBY: 'รอผู้เล่น', QUESTION: 'กำลังตอบ', REVEAL: 'เฉลย', PUZZLE: 'ห้องสมบัติ', PODIUM: 'จบเกม' };
